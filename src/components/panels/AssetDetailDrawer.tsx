@@ -3,7 +3,12 @@
 import Image from "next/image";
 import { Gauge, MapPin, Wrench } from "lucide-react";
 
+import { AgentTracePanel } from "@/components/panels/AgentTracePanel";
 import type { DemoIssue } from "@/data/presidio-demo";
+import type {
+  AgentTraceStep,
+  AnalysisModelDetails,
+} from "@/lib/agent-trace";
 import { buildAssetOperationsContext } from "@/lib/gis-context";
 import type {
   ActivityLogEntry,
@@ -26,6 +31,8 @@ type AssetDetailDrawerProps = {
   analysisStatus: "idle" | "running" | "succeeded" | "failed";
   triageResult: TriageResult | null;
   analysisError: string | null;
+  analysisTrace: AgentTraceStep[];
+  analysisModelDetails: AnalysisModelDetails | null;
   activeWorkOrder: GeneratedWorkOrder | null;
   activityLog: ActivityLogEntry[];
   onNoteChange: (note: string) => void;
@@ -39,6 +46,8 @@ export function AssetDetailDrawer({
   analysisStatus,
   triageResult,
   analysisError,
+  analysisTrace,
+  analysisModelDetails,
   activeWorkOrder,
   activityLog,
   onNoteChange,
@@ -183,6 +192,10 @@ export function AssetDetailDrawer({
             {analysisError}
           </p>
         ) : null}
+        <AgentTracePanel
+          trace={analysisTrace}
+          modelDetails={analysisModelDetails}
+        />
         {triageResult ? (
           <article className="mt-3 border border-emerald-500/60 bg-slate-900 p-3 text-sm">
             <div className="mb-2 flex items-start justify-between gap-3">

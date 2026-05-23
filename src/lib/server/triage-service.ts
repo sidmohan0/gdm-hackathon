@@ -1,10 +1,19 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import { ZodError } from "zod";
 
 import {
   getAssetById,
   type LngLat,
   seedIssues,
 } from "@/data/presidio-demo";
+import {
+  type AgentTraceStep,
+  type AnalysisModelDetails,
+  type ModelResponseSource,
+  createPhotoReceivedTrace,
+  markTraceFailed,
+  setTraceStepStatus,
+} from "@/lib/agent-trace";
 import {
   buildAssetOperationsContext,
   getNearbyAssets,
@@ -24,6 +33,8 @@ export class TriageError extends Error {
   constructor(
     message: string,
     public readonly status = 502,
+    public readonly trace: AgentTraceStep[] = [],
+    public readonly modelDetails: AnalysisModelDetails | null = null,
   ) {
     super(message);
   }
@@ -35,6 +46,14 @@ type AnalyzePhotoInput = {
   clickedCoordinates: LngLat;
   photoBytes: ArrayBuffer;
   mimeType: string;
+  photoName?: string;
+};
+
+export type TriageAnalysis = {
+  result: TriageResult;
+  trace: AgentTraceStep[];
+  modelDetails: AnalysisModelDetails;
+  analyzedAt: string;
 };
 
 const submitTriageFunction = {
@@ -150,66 +169,279 @@ function buildContext({
   };
 }
 
-function candidateFromResponse(response: {
+function responseSource(response: {
   functionCalls?: Array<{
     name?: string;
     args?: unknown;
   }>;
   text?: string;
-}) {
+}): ModelResponseSource {
   const functionCall = response.functionCalls?.find(
     (call) => call.name === submitTriageFunction.name,
   );
 
   if (functionCall?.args) {
-    return functionCall.args;
+    return "function_call";
   }
 
-  return parseTriageJsonText(response.text ?? "");
+  return response.text ? "text_json" : "none";
+}
+
+function candidateFromResponse(
+  response: {
+    functionCalls?: Array<{
+      name?: string;
+      args?: unknown;
+    }>;
+    text?: string;
+  },
+  source: ModelResponseSource,
+) {
+  if (source === "function_call") {
+    const functionCall = response.functionCalls?.find(
+      (call) => call.name === submitTriageFunction.name,
+    );
+
+    return functionCall?.args;
+  }
+
+  if (source === "text_json") {
+    return parseTriageJsonText(response.text ?? "");
+  }
+
+  throw new Error("Gemini returned no structured triage payload.");
+}
+
+function createModelDetails(
+  overrides: Partial<AnalysisModelDetails> = {},
+): AnalysisModelDetails {
+  return {
+    modelId: TRIAGE_MODEL,
+    requestedAt: null,
+    completedAt: null,
+    requestLatencyMs: null,
+    validationStatus: "not_started",
+    responseSource: "none",
+    failureStage: null,
+    failureMessage: null,
+    selectedAssetFieldId: null,
+    nearbyAssetCount: null,
+    openIssueContextCount: null,
+    photoMimeType: null,
+    ...overrides,
+  };
+}
+
+function validationFailureMessage(error: unknown) {
+  if (error instanceof ZodError) {
+    return "Gemini structured output failed validation.";
+  }
+
+  return `Gemini structured output could not be parsed: ${sanitizeError(error)}.`;
 }
 
 export async function analyzePhotoWithGemini(
   input: AnalyzePhotoInput,
-): Promise<TriageResult> {
+): Promise<TriageAnalysis> {
   const apiKey = process.env.GEMINI_API_KEY;
+  let trace = createPhotoReceivedTrace({
+    photoName: input.photoName ?? "field photo",
+    mimeType: input.mimeType,
+  });
+  let modelDetails = createModelDetails({ photoMimeType: input.mimeType });
 
   if (!apiKey) {
-    throw new TriageError("Gemini key missing.", 500);
+    trace = markTraceFailed(
+      trace,
+      "gemini_requested",
+      "Gemini API key is not configured.",
+    );
+    modelDetails = createModelDetails({
+      photoMimeType: input.mimeType,
+      failureStage: "gemini_requested",
+      failureMessage: "Gemini API key is not configured.",
+    });
+
+    throw new TriageError("Gemini key missing.", 500, trace, modelDetails);
   }
 
   try {
-    const context = buildContext(input);
+    let context: ReturnType<typeof buildContext>;
+
+    try {
+      context = buildContext(input);
+      trace = setTraceStepStatus(trace, "gis_context_built", "complete", {
+        detail: `${context.selectedAsset.fieldId} with ${context.nearbyAssets.length} nearby assets and ${context.nearbyOpenIssues.length} open issue signals.`,
+      });
+      modelDetails = createModelDetails({
+        photoMimeType: input.mimeType,
+        selectedAssetFieldId: context.selectedAsset.fieldId,
+        nearbyAssetCount: context.nearbyAssets.length,
+        openIssueContextCount: context.nearbyOpenIssues.length,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to build GIS context.";
+
+      trace = markTraceFailed(trace, "gis_context_built", message);
+      modelDetails = createModelDetails({
+        photoMimeType: input.mimeType,
+        failureStage: "gis_context_built",
+        failureMessage: message,
+      });
+
+      throw new TriageError(message, 400, trace, modelDetails);
+    }
+
     const prompt = buildTriagePrompt(context);
     const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: TRIAGE_MODEL,
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                data: Buffer.from(input.photoBytes).toString("base64"),
-                mimeType: input.mimeType,
-              },
-            },
-          ],
-        },
-      ],
-      config: {
-        temperature: 0.2,
-        maxOutputTokens: 2048,
-        tools: [{ functionDeclarations: [submitTriageFunction] }],
-      },
-    });
+    const requestedAtMs = Date.now();
+    const requestedAt = new Date(requestedAtMs).toISOString();
+    let response: Awaited<ReturnType<typeof ai.models.generateContent>>;
 
-    return validateTriageResult(candidateFromResponse(response));
+    trace = setTraceStepStatus(trace, "gemini_requested", "running", {
+      at: requestedAt,
+      detail: "Requesting Gemini with the photo, GIS context, and BMP-informed triage instructions.",
+    });
+    modelDetails = {
+      ...modelDetails,
+      requestedAt,
+    };
+
+    try {
+      response = await ai.models.generateContent({
+        model: TRIAGE_MODEL,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  data: Buffer.from(input.photoBytes).toString("base64"),
+                  mimeType: input.mimeType,
+                },
+              },
+            ],
+          },
+        ],
+        config: {
+          temperature: 0.2,
+          maxOutputTokens: 2048,
+          tools: [{ functionDeclarations: [submitTriageFunction] }],
+        },
+      });
+    } catch (error) {
+      const completedAtMs = Date.now();
+      const completedAt = new Date(completedAtMs).toISOString();
+      const requestLatencyMs = completedAtMs - requestedAtMs;
+      const message = `Gemini triage failed: ${sanitizeError(error)}.`;
+
+      trace = markTraceFailed(
+        trace,
+        "gemini_requested",
+        message,
+        completedAt,
+        requestLatencyMs,
+      );
+      modelDetails = {
+        ...modelDetails,
+        completedAt,
+        requestLatencyMs,
+        failureStage: "gemini_requested",
+        failureMessage: message,
+      };
+
+      throw new TriageError(message, 502, trace, modelDetails);
+    }
+
+    const completedAtMs = Date.now();
+    const completedAt = new Date(completedAtMs).toISOString();
+    const requestLatencyMs = completedAtMs - requestedAtMs;
+    const source = responseSource(response);
+
+    trace = setTraceStepStatus(trace, "gemini_requested", "complete", {
+      at: completedAt,
+      latencyMs: requestLatencyMs,
+      detail: "Gemini returned a candidate work-order triage response.",
+    });
+    trace = setTraceStepStatus(
+      trace,
+      "structured_output_validated",
+      "running",
+      {
+        at: completedAt,
+        detail: "Checking function-call/text output against the triage schema.",
+      },
+    );
+    modelDetails = {
+      ...modelDetails,
+      completedAt,
+      requestLatencyMs,
+      responseSource: source,
+    };
+
+    let result: TriageResult;
+
+    try {
+      result = validateTriageResult(candidateFromResponse(response, source));
+    } catch (error) {
+      const message = validationFailureMessage(error);
+
+      trace = markTraceFailed(
+        trace,
+        "structured_output_validated",
+        message,
+        new Date().toISOString(),
+      );
+      modelDetails = {
+        ...modelDetails,
+        validationStatus: "failed",
+        failureStage: "structured_output_validated",
+        failureMessage: message,
+      };
+
+      throw new TriageError(message, 422, trace, modelDetails);
+    }
+
+    trace = setTraceStepStatus(
+      trace,
+      "structured_output_validated",
+      "complete",
+      {
+        detail: "Schema accepted; no local issue or work order was created before this point.",
+      },
+    );
+    trace = setTraceStepStatus(trace, "priority_assigned", "complete", {
+      detail: `${result.severity} severity at ${Math.round(
+        result.confidence * 100,
+      )}% confidence maps to ${result.workOrderPriority} work-order priority.`,
+    });
+    modelDetails = {
+      ...modelDetails,
+      validationStatus: "passed",
+    };
+
+    return {
+      result,
+      trace,
+      modelDetails,
+      analyzedAt: new Date().toISOString(),
+    };
   } catch (error) {
     if (error instanceof TriageError) {
       throw error;
     }
 
-    throw new TriageError(`Gemini triage failed: ${sanitizeError(error)}.`);
+    const message = `Gemini triage failed: ${sanitizeError(error)}.`;
+
+    trace = markTraceFailed(trace, "gemini_requested", message);
+    modelDetails = {
+      ...modelDetails,
+      failureStage: "gemini_requested",
+      failureMessage: message,
+    };
+
+    throw new TriageError(message, 502, trace, modelDetails);
   }
 }

@@ -13,6 +13,10 @@ import {
   PRESIDIO_COURSE,
   presidioAssets,
 } from "@/data/presidio-demo";
+import type {
+  AgentTraceStep,
+  AnalysisModelDetails,
+} from "@/lib/agent-trace";
 import { useDemoStore } from "@/lib/demo-store";
 import {
   createCheckingReadiness,
@@ -22,6 +26,14 @@ import {
   defaultLayerVisibility,
   type LayerVisibility,
 } from "@/lib/map-style";
+import type { TriageResult } from "@/lib/triage";
+
+type AnalyzePhotoPayload = {
+  result?: TriageResult;
+  trace?: AgentTraceStep[];
+  modelDetails?: AnalysisModelDetails | null;
+  error?: string;
+};
 
 export function DemoDashboard() {
   const [layers, setLayers] = useState<LayerVisibility>(defaultLayerVisibility);
@@ -35,6 +47,10 @@ export function DemoDashboard() {
   const analysisStatus = useDemoStore((state) => state.analysisStatus);
   const triageResult = useDemoStore((state) => state.triageResult);
   const analysisError = useDemoStore((state) => state.analysisError);
+  const analysisTrace = useDemoStore((state) => state.analysisTrace);
+  const analysisModelDetails = useDemoStore(
+    (state) => state.analysisModelDetails,
+  );
   const generatedWorkOrders = useDemoStore(
     (state) => state.generatedWorkOrders,
   );
@@ -118,13 +134,27 @@ export function DemoDashboard() {
         method: "POST",
         body: formData,
       });
-      const payload = await response.json();
+      const payload = (await response.json()) as AnalyzePhotoPayload;
 
       if (!response.ok) {
-        throw new Error(payload.error ?? "Gemini analysis failed.");
+        failAnalysis(
+          payload.error ?? "Gemini analysis failed.",
+          payload.trace,
+          payload.modelDetails,
+        );
+        return;
       }
 
-      completeAnalysis(payload.result);
+      if (!payload.result) {
+        failAnalysis(
+          "Gemini analysis did not return a triage result.",
+          payload.trace,
+          payload.modelDetails,
+        );
+        return;
+      }
+
+      completeAnalysis(payload.result, payload.trace, payload.modelDetails);
     } catch (error) {
       failAnalysis(
         error instanceof Error ? error.message : "Gemini analysis failed.",
@@ -200,6 +230,8 @@ export function DemoDashboard() {
           analysisStatus={analysisStatus}
           triageResult={triageResult}
           analysisError={analysisError}
+          analysisTrace={analysisTrace}
+          analysisModelDetails={analysisModelDetails}
           activeWorkOrder={activeWorkOrder}
           activityLog={activityLog}
           onNoteChange={setSuperintendentNote}

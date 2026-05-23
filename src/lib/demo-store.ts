@@ -10,6 +10,14 @@ import {
   seedIssues,
 } from "@/data/presidio-demo";
 import {
+  appendClientCreationTrace,
+  createAnalysisStartedTrace,
+  createPhotoReceivedTrace,
+  markTraceFailed,
+  type AgentTraceStep,
+  type AnalysisModelDetails,
+} from "@/lib/agent-trace";
+import {
   buildGeneratedArtifacts,
   type ActivityLogEntry,
   type GeneratedObservation,
@@ -33,6 +41,8 @@ type DemoState = {
   analysisStatus: "idle" | "running" | "succeeded" | "failed";
   triageResult: TriageResult | null;
   analysisError: string | null;
+  analysisTrace: AgentTraceStep[];
+  analysisModelDetails: AnalysisModelDetails | null;
   generatedObservations: GeneratedObservation[];
   generatedWorkOrders: GeneratedWorkOrder[];
   activityLog: ActivityLogEntry[];
@@ -46,8 +56,16 @@ type DemoState = {
   }) => void;
   setSuperintendentNote: (note: string) => void;
   startAnalysis: () => void;
-  completeAnalysis: (result: TriageResult) => void;
-  failAnalysis: (error: string) => void;
+  completeAnalysis: (
+    result: TriageResult,
+    trace?: AgentTraceStep[],
+    modelDetails?: AnalysisModelDetails | null,
+  ) => void;
+  failAnalysis: (
+    error: string,
+    trace?: AgentTraceStep[],
+    modelDetails?: AnalysisModelDetails | null,
+  ) => void;
   resetDemo: () => void;
 };
 
@@ -61,6 +79,8 @@ export const useDemoStore = create<DemoState>()(
       analysisStatus: "idle",
       triageResult: null,
       analysisError: null,
+      analysisTrace: [],
+      analysisModelDetails: null,
       generatedObservations: [],
       generatedWorkOrders: [],
       activityLog: [],
@@ -79,6 +99,12 @@ export const useDemoStore = create<DemoState>()(
           triageResult:
             state.attachedPhoto?.assetId === assetId ? state.triageResult : null,
           analysisError: null,
+          analysisTrace:
+            state.attachedPhoto?.assetId === assetId ? state.analysisTrace : [],
+          analysisModelDetails:
+            state.attachedPhoto?.assetId === assetId
+              ? state.analysisModelDetails
+              : null,
         })),
       attachDemoPhoto: () => {
         const selectedAssetId = get().selectedAssetId;
@@ -96,7 +122,14 @@ export const useDemoStore = create<DemoState>()(
             mimeType: "image/png",
           },
           analysisStatus: "idle",
+          triageResult: null,
           analysisError: null,
+          analysisTrace: createPhotoReceivedTrace({
+            photoName: "demo-image.png",
+            mimeType: "image/png",
+          }),
+          analysisModelDetails: null,
+          activeWorkOrderId: null,
         });
       },
       attachUploadedPhoto: (photo) => {
@@ -115,16 +148,33 @@ export const useDemoStore = create<DemoState>()(
             mimeType: photo.mimeType,
           },
           analysisStatus: "idle",
+          triageResult: null,
           analysisError: null,
+          analysisTrace: createPhotoReceivedTrace({
+            photoName: photo.name || "uploaded-photo",
+            mimeType: photo.mimeType || "image/png",
+          }),
+          analysisModelDetails: null,
+          activeWorkOrderId: null,
         });
       },
       setSuperintendentNote: (note) => set({ superintendentNote: note }),
-      startAnalysis: () =>
+      startAnalysis: () => {
+        const photo = get().attachedPhoto;
+
         set({
           analysisStatus: "running",
+          triageResult: null,
           analysisError: null,
-        }),
-      completeAnalysis: (result) =>
+          analysisTrace: createAnalysisStartedTrace({
+            photoName: photo?.name ?? "field photo",
+            mimeType: photo?.mimeType,
+          }),
+          analysisModelDetails: null,
+          activeWorkOrderId: null,
+        });
+      },
+      completeAnalysis: (result, trace, modelDetails) =>
         set((state) => {
           const asset = state.selectedAssetId
             ? getAssetById(state.selectedAssetId)
@@ -135,6 +185,8 @@ export const useDemoStore = create<DemoState>()(
               analysisStatus: "succeeded",
               triageResult: result,
               analysisError: null,
+              analysisTrace: trace ?? state.analysisTrace,
+              analysisModelDetails: modelDetails ?? state.analysisModelDetails,
             };
           }
 
@@ -158,6 +210,14 @@ export const useDemoStore = create<DemoState>()(
             analysisStatus: "succeeded",
             triageResult: result,
             analysisError: null,
+            analysisTrace: appendClientCreationTrace({
+              trace: trace ?? state.analysisTrace,
+              issueId: artifacts.issue.id,
+              workOrderId: artifacts.workOrder.id,
+              fieldId: asset.fieldId,
+              priority: artifacts.workOrder.priority,
+            }),
+            analysisModelDetails: modelDetails ?? state.analysisModelDetails,
             issues: [
               ...state.issues.filter(
                 (issue) => issue.id !== artifacts.issue.id,
@@ -180,11 +240,26 @@ export const useDemoStore = create<DemoState>()(
             activeWorkOrderId: artifacts.workOrder.id,
           };
         }),
-      failAnalysis: (error) =>
-        set({
+      failAnalysis: (error, trace, modelDetails) =>
+        set((state) => ({
           analysisStatus: "failed",
           analysisError: error,
-        }),
+          analysisTrace:
+            trace ??
+            markTraceFailed(
+              state.analysisTrace.length > 0
+                ? state.analysisTrace
+                : createAnalysisStartedTrace({
+                    photoName: state.attachedPhoto?.name ?? "field photo",
+                    mimeType: state.attachedPhoto?.mimeType,
+                  }),
+              "gemini_requested",
+              error,
+            ),
+          analysisModelDetails: modelDetails ?? state.analysisModelDetails,
+          triageResult: null,
+          activeWorkOrderId: null,
+        })),
       resetDemo: () =>
         set({
           selectedAssetId: null,
@@ -194,6 +269,8 @@ export const useDemoStore = create<DemoState>()(
           analysisStatus: "idle",
           triageResult: null,
           analysisError: null,
+          analysisTrace: [],
+          analysisModelDetails: null,
           generatedObservations: [],
           generatedWorkOrders: [],
           activityLog: [],
@@ -211,6 +288,8 @@ export const useDemoStore = create<DemoState>()(
         analysisStatus: state.analysisStatus,
         triageResult: state.triageResult,
         analysisError: state.analysisError,
+        analysisTrace: state.analysisTrace,
+        analysisModelDetails: state.analysisModelDetails,
         generatedObservations: state.generatedObservations,
         generatedWorkOrders: state.generatedWorkOrders,
         activityLog: state.activityLog,

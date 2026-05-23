@@ -54,12 +54,15 @@ export async function POST(request: Request) {
       clickedCoordinates,
       photoBytes: await photo.arrayBuffer(),
       mimeType: photo.type || "image/png",
+      photoName: "name" in photo ? photo.name : undefined,
     });
 
     return NextResponse.json({
       model: TRIAGE_MODEL,
-      analyzedAt: new Date().toISOString(),
-      result,
+      analyzedAt: result.analyzedAt,
+      result: result.result,
+      trace: result.trace,
+      modelDetails: result.modelDetails,
     });
   } catch (error) {
     const status = error instanceof TriageError ? error.status : 400;
@@ -68,6 +71,14 @@ export async function POST(request: Request) {
         ? error.message
         : "Unable to analyze the photo.";
 
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json(
+      {
+        error: message,
+        trace: error instanceof TriageError ? error.trace : [],
+        modelDetails:
+          error instanceof TriageError ? error.modelDetails : null,
+      },
+      { status },
+    );
   }
 }
