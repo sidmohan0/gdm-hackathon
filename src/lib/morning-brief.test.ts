@@ -237,7 +237,11 @@ describe("morning superintendent brief contract", () => {
           },
         ],
         risksToVerify: [
-          "Rotor head PGC-SH-014 may catch mower equipment near the collar.",
+          {
+            assetId: "PGC-SH-014",
+            riskDescription:
+              "Rotor head PGC-SH-014 may catch mower equipment near the collar.",
+          },
         ],
       },
       {
@@ -251,6 +255,8 @@ describe("morning superintendent brief contract", () => {
     expect(result.topPriorities[0].reason).toContain("Flag the head");
     expect(result.weatherWatch.summary).toContain("Wind may affect");
     expect(result.crewPlan[0].relatedAssetIds).toEqual(["PGC-SH-014"]);
+    expect(result.risksToVerify[0].risk).toContain("Rotor head");
+    expect(result.risksToVerify[0].issueId).toBe("PGC-ISS-101");
     expect(result.risksToVerify[0].assetId).toBe("PGC-SH-014");
   });
 
@@ -277,6 +283,67 @@ describe("morning superintendent brief contract", () => {
     expect(result.topPriorities[0].recommendedAction).toBe(
       issues[0].recommendedAction,
     );
+  });
+
+  it("bounds managed-agent priority lists and flattens keyed crew plans", () => {
+    const result = validateMorningBriefResponse(
+      {
+        ...validBrief,
+        topPriorities: [
+          ...validBrief.topPriorities,
+          {
+            issueId: "PGC-ISS-102",
+            assetId: "PGC-LP-03",
+            title: "Soft wet spot over lateral pipe",
+            recommendedAction:
+              "Close the zone and pressure test the lateral pipe.",
+          },
+          {
+            issueId: "PGC-ISS-103",
+            assetId: "PGC-VLV-07",
+            title: "Valve box cover sunk below collar",
+            recommendedAction:
+              "Raise the box ring and confirm it sits flush with the collar.",
+          },
+          {
+            issueId: "PGC-ISS-104",
+            assetId: "PGC-SH-033",
+            title: "Nozzle arc drifting into native rough",
+            recommendedAction:
+              "Adjust the nozzle arc during the west-loop inspection.",
+          },
+          {
+            issueId: "PGC-ISS-101",
+            assetId: "PGC-SH-014",
+            title: "Duplicate extra model priority",
+            recommendedAction: "Do not render this fifth priority.",
+          },
+        ],
+        crewPlan: {
+          morning: {
+            role: "irrigation tech",
+            tasks: [
+              "Inspect PGC-SH-014 before mowing and lower the proud rotor.",
+            ],
+          },
+        },
+      },
+      {
+        issues,
+        workOrders,
+        assetIds: ["PGC-SH-014", "PGC-LP-03", "PGC-VLV-07", "PGC-SH-033"],
+      },
+    );
+
+    expect(result.topPriorities).toHaveLength(4);
+    expect(result.topPriorities.map((priority) => priority.title)).not
+      .toContain("Duplicate extra model priority");
+    expect(result.crewPlan[0]).toMatchObject({
+      window: "morning",
+      crew: "irrigation tech",
+      focus: "Inspect PGC-SH-014 before mowing and lower the proud rotor.",
+      relatedAssetIds: ["PGC-SH-014"],
+    });
   });
 
   it("records the local persistence trace step after a brief is accepted", () => {

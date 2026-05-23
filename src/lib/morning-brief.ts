@@ -405,17 +405,26 @@ function arrayValue(value: unknown) {
 
 function crewPlanItems(value: unknown) {
   if (Array.isArray(value)) {
-    return value;
+    return value.slice(0, 4);
   }
 
   if (!isRecord(value)) {
     return [];
   }
 
-  return Object.entries(value).map(([window, action]) => ({
-    window,
-    action,
-  }));
+  return Object.entries(value)
+    .flatMap(([window, action]) => {
+      if (Array.isArray(action)) {
+        return action.map((entry) =>
+          isRecord(entry) ? { window, ...entry } : { window, action: entry },
+        );
+      }
+
+      return isRecord(action)
+        ? [{ window, ...action }]
+        : [{ window, action }];
+    })
+    .slice(0, 4);
 }
 
 function textForIdExtraction(value: unknown) {
@@ -490,59 +499,65 @@ function normalizeMorningBriefCandidate(
     references.issues.map((issue) => [issue.id, issue] as const),
   );
   const issueIds = references.issues.map((issue) => issue.id);
+  const issueIdByAssetId = new Map(
+    references.issues.map((issue) => [issue.assetId, issue.id] as const),
+  );
   const assetIds = references.assetIds;
   const workOrderIds = references.workOrders.map((workOrder) => workOrder.id);
-  const topPriorities = arrayValue(candidate.topPriorities).map((item, index) => {
-    if (!isRecord(item)) {
-      return item;
-    }
+  const topPriorities = arrayValue(candidate.topPriorities)
+    .slice(0, 4)
+    .map((item, index) => {
+      if (!isRecord(item)) {
+        return item;
+      }
 
-    const text = textForIdExtraction(item);
-    const issueId =
-      stringValue(item.issueId) ?? extractKnownIds(text, issueIds)[0];
-    const issue = issueId ? issueById.get(issueId) : undefined;
-    const assetId =
-      stringValue(item.assetId) ??
-      (issue?.assetId && text.includes(issue.assetId)
-        ? issue.assetId
-        : undefined) ??
-      extractKnownIds(text, assetIds)[0] ??
-      issue?.assetId;
-    const workOrderId =
-      stringValue(item.workOrderId) ?? extractKnownIds(text, workOrderIds)[0];
-    const explicitRecommendedAction =
-      stringValue(item.recommendedAction) ??
-      joinedStringValue(item.recommendedActions) ??
-      stringValue(item.action) ??
-      stringValue(item.nextAction) ??
-      stringValue(item.nextStep) ??
-      stringValue(item.priority) ??
-      stringValue(item.task) ??
-      joinedStringValue(item.tasks) ??
-      stringValue(item.recommendation) ??
-      joinedStringValue(item.recommendations) ??
-      stringValue(item.summary);
-    const recommendedAction =
-      explicitRecommendedAction ?? issue?.recommendedAction;
+      const text = textForIdExtraction(item);
+      const issueId =
+        stringValue(item.issueId) ?? extractKnownIds(text, issueIds)[0];
+      const issue = issueId ? issueById.get(issueId) : undefined;
+      const assetId =
+        stringValue(item.assetId) ??
+        (issue?.assetId && text.includes(issue.assetId)
+          ? issue.assetId
+          : undefined) ??
+        extractKnownIds(text, assetIds)[0] ??
+        issue?.assetId;
+      const workOrderId =
+        stringValue(item.workOrderId) ?? extractKnownIds(text, workOrderIds)[0];
+      const explicitRecommendedAction =
+        stringValue(item.recommendedAction) ??
+        joinedStringValue(item.recommendedActions) ??
+        stringValue(item.action) ??
+        stringValue(item.nextAction) ??
+        stringValue(item.nextStep) ??
+        stringValue(item.priority) ??
+        stringValue(item.task) ??
+        joinedStringValue(item.tasks) ??
+        stringValue(item.recommendation) ??
+        joinedStringValue(item.recommendations) ??
+        stringValue(item.summary);
+      const recommendedAction =
+        explicitRecommendedAction ?? issue?.recommendedAction;
 
-    return {
-      ...item,
-      rank: numberValue(item.rank) ?? index + 1,
-      issueId,
-      assetId,
-      workOrderId,
-      title: stringValue(item.title) ?? issue?.title ?? `Priority ${index + 1}`,
-      reason:
-        stringValue(item.reason) ??
-        stringValue(item.rationale) ??
-        stringValue(item.why) ??
-        stringValue(item.summary) ??
-        explicitRecommendedAction ??
-        issue?.summary ??
+      return {
+        ...item,
+        rank: numberValue(item.rank) ?? index + 1,
+        issueId,
+        assetId,
+        workOrderId,
+        title:
+          stringValue(item.title) ?? issue?.title ?? `Priority ${index + 1}`,
+        reason:
+          stringValue(item.reason) ??
+          stringValue(item.rationale) ??
+          stringValue(item.why) ??
+          stringValue(item.summary) ??
+          explicitRecommendedAction ??
+          issue?.summary ??
+          recommendedAction,
         recommendedAction,
-      recommendedAction,
-    };
-  });
+      };
+    });
   const fallbackIssueIds = topPriorities
     .map((item) => (isRecord(item) ? stringValue(item.issueId) : undefined))
     .filter((issueId): issueId is string => Boolean(issueId));
@@ -552,6 +567,17 @@ function normalizeMorningBriefCandidate(
   const fallbackWorkOrderIds = topPriorities
     .map((item) => (isRecord(item) ? stringValue(item.workOrderId) : undefined))
     .filter((workOrderId): workOrderId is string => Boolean(workOrderId));
+  const fallbackFocuses = topPriorities
+    .flatMap((item) =>
+      isRecord(item)
+        ? [
+            stringValue(item.recommendedAction),
+            stringValue(item.reason),
+            stringValue(item.title),
+          ]
+        : [],
+    )
+    .filter((focus): focus is string => Boolean(focus));
 
   return {
     ...candidate,
@@ -567,6 +593,7 @@ function normalizeMorningBriefCandidate(
         fallbackIssueIds,
         fallbackAssetIds,
         fallbackWorkOrderIds,
+        fallbackFocuses,
       }),
     ),
     risksToVerify: arrayValue(candidate.risksToVerify).map((item) =>
@@ -575,6 +602,7 @@ function normalizeMorningBriefCandidate(
         issueIds: references.issues.map((issue) => issue.id),
         assetIds,
         workOrderIds,
+        issueIdByAssetId,
         fallbackIssueIds,
         fallbackAssetIds,
         fallbackWorkOrderIds,
@@ -622,6 +650,7 @@ function normalizeCrewPlanItem({
   fallbackIssueIds,
   fallbackAssetIds,
   fallbackWorkOrderIds,
+  fallbackFocuses,
 }: {
   item: unknown;
   index: number;
@@ -631,6 +660,7 @@ function normalizeCrewPlanItem({
   fallbackIssueIds: string[];
   fallbackAssetIds: string[];
   fallbackWorkOrderIds: string[];
+  fallbackFocuses: string[];
 }) {
   if (!isRecord(item)) {
     return item;
@@ -660,14 +690,20 @@ function normalizeCrewPlanItem({
     ...item,
     sequence: numberValue(item.sequence) ?? index + 1,
     window: normalizeWindowValue(item.window, index),
-    crew: stringValue(item.crew) ?? stringValue(item.role),
+    crew:
+      stringValue(item.crew) ??
+      stringValue(item.role) ??
+      stringValue(item.owner) ??
+      "operations crew",
     focus:
       stringValue(item.focus) ??
       stringValue(item.activity) ??
       stringValue(item.action) ??
       stringValue(item.task) ??
       joinedStringValue(item.tasks) ??
-      stringValue(item.summary),
+      stringValue(item.summary) ??
+      fallbackFocuses[index] ??
+      fallbackFocuses[0],
     relatedIssueIds:
       relatedIssueIds.length > 0 ? relatedIssueIds : fallbackIssueIds,
     relatedWorkOrderIds:
@@ -684,6 +720,7 @@ function normalizeRiskItem({
   issueIds,
   assetIds,
   workOrderIds,
+  issueIdByAssetId,
   fallbackIssueIds,
   fallbackAssetIds,
   fallbackWorkOrderIds,
@@ -692,17 +729,25 @@ function normalizeRiskItem({
   issueIds: string[];
   assetIds: string[];
   workOrderIds: string[];
+  issueIdByAssetId: Map<string, string>;
   fallbackIssueIds: string[];
   fallbackAssetIds: string[];
   fallbackWorkOrderIds: string[];
 }) {
   const record = isRecord(item) ? item : { risk: item };
   const text = textForIdExtraction(item);
+  const assetId =
+    stringValue(record.assetId) ??
+    extractKnownIds(text, assetIds)[0] ??
+    fallbackAssetIds[0];
 
   return {
     ...record,
     risk:
       stringValue(record.risk) ??
+      stringValue(record.riskDescription) ??
+      stringValue(record.description) ??
+      stringValue(record.concern) ??
       stringValue(record.summary) ??
       stringValue(item),
     verificationStep:
@@ -712,11 +757,9 @@ function normalizeRiskItem({
     issueId:
       stringValue(record.issueId) ??
       extractKnownIds(text, issueIds)[0] ??
+      (assetId ? issueIdByAssetId.get(assetId) : undefined) ??
       fallbackIssueIds[0],
-    assetId:
-      stringValue(record.assetId) ??
-      extractKnownIds(text, assetIds)[0] ??
-      fallbackAssetIds[0],
+    assetId,
     workOrderId:
       stringValue(record.workOrderId) ??
       extractKnownIds(text, workOrderIds)[0] ??
