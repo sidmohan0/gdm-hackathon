@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { seedIssues } from "@/data/presidio-demo";
 import {
   buildAssetOperationsContext,
+  getNearbyAssets,
   getNearbyOpenIssues,
   metersBetween,
   sortIssuesByOperationalPriority,
@@ -40,6 +41,7 @@ describe("gis context helpers", () => {
 
   it("returns an empty context for unknown assets", () => {
     expect(getNearbyOpenIssues("PGC-NOT-REAL")).toEqual([]);
+    expect(getNearbyAssets("PGC-NOT-REAL")).toEqual([]);
     expect(buildAssetOperationsContext("PGC-NOT-REAL")).toBeNull();
   });
 });

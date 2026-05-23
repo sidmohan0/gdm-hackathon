@@ -5,6 +5,7 @@ import {
 } from "@/lib/weather";
 
 const WEATHER_CACHE_MS = 5 * 60_000;
+const WEATHER_FAILURE_CACHE_MS = 30_000;
 
 let cachedWeather:
   | {
@@ -43,7 +44,7 @@ export async function getOpenMeteoWeather() {
   try {
     const response = await fetch(buildOpenMeteoForecastUrl(), {
       cache: "no-store",
-      signal: AbortSignal.timeout(4500),
+      signal: AbortSignal.timeout(8000),
     });
 
     if (!response.ok) {
@@ -60,7 +61,11 @@ export async function getOpenMeteoWeather() {
   }
 
   cachedWeather = {
-    expiresAt: now + WEATHER_CACHE_MS,
+    expiresAt:
+      now +
+      (value.status === "available"
+        ? WEATHER_CACHE_MS
+        : WEATHER_FAILURE_CACHE_MS),
     value,
   };
 

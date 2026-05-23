@@ -1,14 +1,25 @@
 "use client";
 
-import { Brain, CloudSun, RotateCcw, Upload } from "lucide-react";
+import {
+  Brain,
+  CloudSun,
+  ImageUp,
+  LoaderCircle,
+  RotateCcw,
+  Upload,
+} from "lucide-react";
 
 import type { LayerVisibility } from "@/lib/map-style";
 
 type LayerPanelProps = {
   layers: LayerVisibility;
   selectedAssetId: string | null;
+  canAnalyze: boolean;
+  isAnalyzing: boolean;
   onLayerChange: (nextLayers: LayerVisibility) => void;
   onUploadPhoto: () => void;
+  onPhotoFileSelected: (file: File) => void;
+  onAnalyze: () => void;
   onReset: () => void;
 };
 
@@ -47,8 +58,12 @@ const layerLabels: Array<{
 export function LayerPanel({
   layers,
   selectedAssetId,
+  canAnalyze,
+  isAnalyzing,
   onLayerChange,
   onUploadPhoto,
+  onPhotoFileSelected,
+  onAnalyze,
   onReset,
 }: LayerPanelProps) {
   return (
@@ -97,22 +112,51 @@ export function LayerPanel({
       </div>
 
       <div className="mt-5 grid grid-cols-1 gap-2">
+        <div className="grid grid-cols-[1fr_auto] gap-2">
+          <button
+            type="button"
+            onClick={onUploadPhoto}
+            disabled={!selectedAssetId}
+            className="inline-flex h-11 items-center justify-center gap-2 border border-emerald-500 bg-emerald-500 px-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
+          >
+            <Upload className="h-4 w-4" aria-hidden />
+            Upload photo
+          </button>
+          <label
+            className="inline-flex h-11 w-11 cursor-pointer items-center justify-center border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 has-[:disabled]:cursor-not-allowed has-[:disabled]:text-slate-600"
+            title="Choose image"
+            aria-label="Choose image"
+          >
+            <ImageUp className="h-4 w-4" aria-hidden />
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              disabled={!selectedAssetId}
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+
+                if (file) {
+                  onPhotoFileSelected(file);
+                  event.currentTarget.value = "";
+                }
+              }}
+            />
+          </label>
+        </div>
         <button
           type="button"
-          onClick={onUploadPhoto}
-          disabled={!selectedAssetId}
-          className="inline-flex h-11 items-center justify-center gap-2 border border-emerald-500 bg-emerald-500 px-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
+          onClick={onAnalyze}
+          disabled={!canAnalyze || isAnalyzing}
+          className="inline-flex h-11 items-center justify-center gap-2 border border-slate-700 bg-slate-900 px-3 text-sm font-semibold text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:text-slate-600"
         >
-          <Upload className="h-4 w-4" aria-hidden />
-          Upload photo
-        </button>
-        <button
-          type="button"
-          disabled
-          className="inline-flex h-11 items-center justify-center gap-2 border border-slate-700 bg-slate-900 px-3 text-sm font-semibold text-slate-300 transition disabled:cursor-not-allowed disabled:text-slate-600"
-        >
-          <Brain className="h-4 w-4" aria-hidden />
-          Analyze
+          {isAnalyzing ? (
+            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <Brain className="h-4 w-4" aria-hidden />
+          )}
+          {isAnalyzing ? "Analyzing" : "Analyze"}
         </button>
         <button
           type="button"

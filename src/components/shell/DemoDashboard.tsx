@@ -8,7 +8,11 @@ import { AssetListPanel } from "@/components/panels/AssetListPanel";
 import { LayerPanel } from "@/components/panels/LayerPanel";
 import { ReadinessDot } from "@/components/shell/ReadinessDot";
 import { WeatherChip } from "@/components/shell/WeatherChip";
-import { PRESIDIO_COURSE, presidioAssets } from "@/data/presidio-demo";
+import {
+  getAssetById,
+  PRESIDIO_COURSE,
+  presidioAssets,
+} from "@/data/presidio-demo";
 import { useDemoStore } from "@/lib/demo-store";
 import {
   createCheckingReadiness,
@@ -26,12 +30,20 @@ export function DemoDashboard() {
   );
   const selectedAssetId = useDemoStore((state) => state.selectedAssetId);
   const issues = useDemoStore((state) => state.issues);
-  const attachedPhotoAssetId = useDemoStore(
-    (state) => state.attachedPhotoAssetId,
-  );
-  const attachedPhotoPath = useDemoStore((state) => state.attachedPhotoPath);
+  const attachedPhoto = useDemoStore((state) => state.attachedPhoto);
+  const superintendentNote = useDemoStore((state) => state.superintendentNote);
+  const analysisStatus = useDemoStore((state) => state.analysisStatus);
+  const triageResult = useDemoStore((state) => state.triageResult);
+  const analysisError = useDemoStore((state) => state.analysisError);
   const selectAsset = useDemoStore((state) => state.selectAsset);
   const attachDemoPhoto = useDemoStore((state) => state.attachDemoPhoto);
+  const attachUploadedPhoto = useDemoStore((state) => state.attachUploadedPhoto);
+  const setSuperintendentNote = useDemoStore(
+    (state) => state.setSuperintendentNote,
+  );
+  const startAnalysis = useDemoStore((state) => state.startAnalysis);
+  const completeAnalysis = useDemoStore((state) => state.completeAnalysis);
+  const failAnalysis = useDemoStore((state) => state.failAnalysis);
   const resetDemo = useDemoStore((state) => state.resetDemo);
 
   const activeIssueCount = useMemo(
@@ -41,6 +53,79 @@ export function DemoDashboard() {
   const handleMapHealthChange = useCallback((health: MapboxClientHealth) => {
     setMapboxHealth(health);
   }, []);
+  const hasSelectedPhoto =
+    Boolean(selectedAssetId) && attachedPhoto?.assetId === selectedAssetId;
+  const isAnalyzing = analysisStatus === "running";
+  const canAnalyze = Boolean(selectedAssetId && hasSelectedPhoto && !isAnalyzing);
+
+  const handlePhotoFileSelected = useCallback(
+    async (file: File) => {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+
+      attachUploadedPhoto({
+        dataUrl,
+        name: file.name || "uploaded-photo",
+        mimeType: file.type || "image/png",
+      });
+    },
+    [attachUploadedPhoto],
+  );
+
+  const handleAnalyze = useCallback(async () => {
+    const selectedAsset = selectedAssetId ? getAssetById(selectedAssetId) : null;
+
+    if (!selectedAsset || !attachedPhoto || attachedPhoto.assetId !== selectedAssetId) {
+      return;
+    }
+
+    startAnalysis();
+
+    try {
+      const photoResponse = await fetch(
+        attachedPhoto.dataUrl ?? attachedPhoto.path ?? "",
+      );
+      const photoBlob = await photoResponse.blob();
+      const formData = new FormData();
+
+      formData.append("assetId", selectedAsset.id);
+      formData.append("note", superintendentNote);
+      formData.append("clickedLongitude", String(selectedAsset.coordinates[0]));
+      formData.append("clickedLatitude", String(selectedAsset.coordinates[1]));
+      formData.append(
+        "photo",
+        photoBlob,
+        attachedPhoto.name || "field-photo.png",
+      );
+
+      const response = await fetch("/api/analyze-photo", {
+        method: "POST",
+        body: formData,
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Gemini analysis failed.");
+      }
+
+      completeAnalysis(payload.result);
+    } catch (error) {
+      failAnalysis(
+        error instanceof Error ? error.message : "Gemini analysis failed.",
+      );
+    }
+  }, [
+    attachedPhoto,
+    completeAnalysis,
+    failAnalysis,
+    selectedAssetId,
+    startAnalysis,
+    superintendentNote,
+  ]);
 
   return (
     <div className="min-h-screen bg-neutral-950 text-slate-100">
@@ -72,8 +157,12 @@ export function DemoDashboard() {
           <LayerPanel
             layers={layers}
             selectedAssetId={selectedAssetId}
+            canAnalyze={canAnalyze}
+            isAnalyzing={isAnalyzing}
             onLayerChange={setLayers}
             onUploadPhoto={attachDemoPhoto}
+            onPhotoFileSelected={handlePhotoFileSelected}
+            onAnalyze={handleAnalyze}
             onReset={resetDemo}
           />
           <AssetListPanel
@@ -94,8 +183,12 @@ export function DemoDashboard() {
         <AssetDetailDrawer
           selectedAssetId={selectedAssetId}
           issues={issues}
-          attachedPhotoAssetId={attachedPhotoAssetId}
-          attachedPhotoPath={attachedPhotoPath}
+          attachedPhoto={attachedPhoto}
+          superintendentNote={superintendentNote}
+          analysisStatus={analysisStatus}
+          triageResult={triageResult}
+          analysisError={analysisError}
+          onNoteChange={setSuperintendentNote}
         />
       </main>
     </div>

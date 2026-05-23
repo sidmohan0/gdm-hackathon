@@ -8,14 +8,35 @@ import {
   type DemoIssue,
   seedIssues,
 } from "@/data/presidio-demo";
+import type { TriageResult } from "@/lib/triage";
+
+type AttachedPhoto = {
+  assetId: string;
+  path: string | null;
+  dataUrl: string | null;
+  name: string;
+  mimeType: string;
+};
 
 type DemoState = {
   selectedAssetId: string | null;
   issues: DemoIssue[];
-  attachedPhotoAssetId: string | null;
-  attachedPhotoPath: string | null;
+  attachedPhoto: AttachedPhoto | null;
+  superintendentNote: string;
+  analysisStatus: "idle" | "running" | "succeeded" | "failed";
+  triageResult: TriageResult | null;
+  analysisError: string | null;
   selectAsset: (assetId: string) => void;
   attachDemoPhoto: () => void;
+  attachUploadedPhoto: (photo: {
+    dataUrl: string;
+    name: string;
+    mimeType: string;
+  }) => void;
+  setSuperintendentNote: (note: string) => void;
+  startAnalysis: () => void;
+  completeAnalysis: (result: TriageResult) => void;
+  failAnalysis: (error: string) => void;
   resetDemo: () => void;
 };
 
@@ -24,19 +45,25 @@ export const useDemoStore = create<DemoState>()(
     (set, get) => ({
       selectedAssetId: null,
       issues: seedIssues,
-      attachedPhotoAssetId: null,
-      attachedPhotoPath: null,
+      attachedPhoto: null,
+      superintendentNote: "",
+      analysisStatus: "idle",
+      triageResult: null,
+      analysisError: null,
       selectAsset: (assetId) =>
         set((state) => ({
           selectedAssetId: assetId,
-          attachedPhotoAssetId:
-            state.attachedPhotoAssetId === assetId
-              ? state.attachedPhotoAssetId
+          attachedPhoto:
+            state.attachedPhoto?.assetId === assetId
+              ? state.attachedPhoto
               : null,
-          attachedPhotoPath:
-            state.attachedPhotoAssetId === assetId
-              ? state.attachedPhotoPath
-              : null,
+          analysisStatus:
+            state.attachedPhoto?.assetId === assetId
+              ? state.analysisStatus
+              : "idle",
+          triageResult:
+            state.attachedPhoto?.assetId === assetId ? state.triageResult : null,
+          analysisError: null,
         })),
       attachDemoPhoto: () => {
         const selectedAssetId = get().selectedAssetId;
@@ -46,16 +73,62 @@ export const useDemoStore = create<DemoState>()(
         }
 
         set({
-          attachedPhotoAssetId: selectedAssetId,
-          attachedPhotoPath: DEMO_PHOTO_PATH,
+          attachedPhoto: {
+            assetId: selectedAssetId,
+            path: DEMO_PHOTO_PATH,
+            dataUrl: null,
+            name: "demo-image.png",
+            mimeType: "image/png",
+          },
+          analysisStatus: "idle",
+          analysisError: null,
         });
       },
+      attachUploadedPhoto: (photo) => {
+        const selectedAssetId = get().selectedAssetId;
+
+        if (!selectedAssetId) {
+          return;
+        }
+
+        set({
+          attachedPhoto: {
+            assetId: selectedAssetId,
+            path: null,
+            dataUrl: photo.dataUrl,
+            name: photo.name,
+            mimeType: photo.mimeType,
+          },
+          analysisStatus: "idle",
+          analysisError: null,
+        });
+      },
+      setSuperintendentNote: (note) => set({ superintendentNote: note }),
+      startAnalysis: () =>
+        set({
+          analysisStatus: "running",
+          analysisError: null,
+        }),
+      completeAnalysis: (result) =>
+        set({
+          analysisStatus: "succeeded",
+          triageResult: result,
+          analysisError: null,
+        }),
+      failAnalysis: (error) =>
+        set({
+          analysisStatus: "failed",
+          analysisError: error,
+        }),
       resetDemo: () =>
         set({
           selectedAssetId: null,
           issues: seedIssues,
-          attachedPhotoAssetId: null,
-          attachedPhotoPath: null,
+          attachedPhoto: null,
+          superintendentNote: "",
+          analysisStatus: "idle",
+          triageResult: null,
+          analysisError: null,
         }),
     }),
     {
@@ -64,8 +137,11 @@ export const useDemoStore = create<DemoState>()(
       partialize: (state) => ({
         selectedAssetId: state.selectedAssetId,
         issues: state.issues,
-        attachedPhotoAssetId: state.attachedPhotoAssetId,
-        attachedPhotoPath: state.attachedPhotoPath,
+        attachedPhoto: state.attachedPhoto,
+        superintendentNote: state.superintendentNote,
+        analysisStatus: state.analysisStatus,
+        triageResult: state.triageResult,
+        analysisError: state.analysisError,
       }),
     },
   ),

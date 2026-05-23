@@ -16,9 +16,11 @@ function uniqueCount(values: string[]) {
 describe("presidio demo seed data", () => {
   it("uses stable unique IDs for all assets and issues", () => {
     const assetIds = presidioAssets.map((asset) => asset.id);
+    const fieldIds = presidioAssets.map((asset) => asset.fieldId);
     const issueIds = seedIssues.map((issue) => issue.id);
 
     expect(uniqueCount(assetIds)).toBe(assetIds.length);
+    expect(uniqueCount(fieldIds)).toBe(fieldIds.length);
     expect(uniqueCount(issueIds)).toBe(issueIds.length);
     expect(assetIds.every((id) => id.startsWith("PGC-"))).toBe(true);
     expect(issueIds.every((id) => id.startsWith("PGC-ISS-"))).toBe(true);

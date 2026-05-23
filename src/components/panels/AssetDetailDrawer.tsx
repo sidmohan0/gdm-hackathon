@@ -6,26 +6,43 @@ import { Gauge, MapPin, Wrench } from "lucide-react";
 import type { DemoIssue } from "@/data/presidio-demo";
 import { buildAssetOperationsContext } from "@/lib/gis-context";
 import { assetColors, severityColors } from "@/lib/map-style";
+import type { TriageResult } from "@/lib/triage";
 
 type AssetDetailDrawerProps = {
   selectedAssetId: string | null;
   issues: DemoIssue[];
-  attachedPhotoAssetId: string | null;
-  attachedPhotoPath: string | null;
+  attachedPhoto: {
+    assetId: string;
+    path: string | null;
+    dataUrl: string | null;
+    name: string;
+    mimeType: string;
+  } | null;
+  superintendentNote: string;
+  analysisStatus: "idle" | "running" | "succeeded" | "failed";
+  triageResult: TriageResult | null;
+  analysisError: string | null;
+  onNoteChange: (note: string) => void;
 };
 
 export function AssetDetailDrawer({
   selectedAssetId,
   issues,
-  attachedPhotoAssetId,
-  attachedPhotoPath,
+  attachedPhoto,
+  superintendentNote,
+  analysisStatus,
+  triageResult,
+  analysisError,
+  onNoteChange,
 }: AssetDetailDrawerProps) {
   const context = selectedAssetId
     ? buildAssetOperationsContext(selectedAssetId, issues)
     : null;
   const asset = context?.asset;
-  const attachedToSelected =
-    asset?.id === attachedPhotoAssetId && attachedPhotoPath !== null;
+  const attachedToSelected = asset?.id === attachedPhoto?.assetId;
+  const photoSrc = attachedToSelected && attachedPhoto
+    ? attachedPhoto.dataUrl ?? attachedPhoto.path
+    : null;
 
   if (!asset || !context) {
     return (
@@ -114,10 +131,22 @@ export function AssetDetailDrawer({
         <p>{asset.notes}</p>
       </div>
 
-      {attachedToSelected ? (
+      <label className="mt-5 block text-sm">
+        <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+          Field note
+        </span>
+        <textarea
+          value={superintendentNote}
+          onChange={(event) => onNoteChange(event.currentTarget.value)}
+          className="min-h-24 w-full resize-y border border-slate-800 bg-slate-900 p-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-emerald-400"
+          placeholder="Standing water near the head after the morning cycle."
+        />
+      </label>
+
+      {photoSrc ? (
         <div className="mt-5 overflow-hidden border border-slate-800 bg-slate-900">
           <Image
-            src={attachedPhotoPath}
+            src={photoSrc}
             alt={`Uploaded field photo for ${asset.name}`}
             width={640}
             height={420}
@@ -126,6 +155,75 @@ export function AssetDetailDrawer({
           />
         </div>
       ) : null}
+
+      <div className="mt-5">
+        <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">
+          Gemini triage
+        </h3>
+        {analysisStatus === "running" ? (
+          <p className="mt-3 border border-slate-800 bg-slate-900 p-3 text-sm text-slate-300">
+            Analysis running.
+          </p>
+        ) : null}
+        {analysisError ? (
+          <p className="mt-3 border border-red-500 bg-red-950/70 p-3 text-sm text-red-100">
+            {analysisError}
+          </p>
+        ) : null}
+        {triageResult ? (
+          <article className="mt-3 border border-emerald-500/60 bg-slate-900 p-3 text-sm">
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <h4 className="font-semibold text-slate-100">
+                {triageResult.title}
+              </h4>
+              <span className="shrink-0 border border-slate-700 px-2 py-1 text-xs uppercase tracking-[0.12em] text-emerald-300">
+                {triageResult.severity}
+              </span>
+            </div>
+            <p className="text-slate-300">{triageResult.summary}</p>
+            <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-slate-400">
+              <dt>Likely asset</dt>
+              <dd className="text-slate-200">{triageResult.likelyAssetId}</dd>
+              <dt>Category</dt>
+              <dd className="text-slate-200">{triageResult.category}</dd>
+              <dt>Priority</dt>
+              <dd className="text-slate-200">
+                {triageResult.workOrderPriority}
+              </dd>
+              <dt>Confidence</dt>
+              <dd className="text-slate-200">
+                {Math.round(triageResult.confidence * 100)}%
+              </dd>
+            </dl>
+            <div className="mt-3 space-y-2 text-slate-300">
+              <p className="font-semibold text-slate-100">
+                {triageResult.workOrderTitle}
+              </p>
+              <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                Evidence
+              </p>
+              <ul className="list-inside list-disc space-y-1">
+                {triageResult.evidence.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+              <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                Recommended actions
+              </p>
+              <ul className="list-inside list-disc space-y-1">
+                {triageResult.recommendedActions.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+              {triageResult.possibleParts.length > 0 ? (
+                <p className="text-xs text-slate-400">
+                  Parts: {triageResult.possibleParts.join(", ")}
+                </p>
+              ) : null}
+            </div>
+          </article>
+        ) : null}
+      </div>
 
       <div className="mt-5">
         <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">

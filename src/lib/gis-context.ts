@@ -3,6 +3,8 @@ import { distance, point } from "@turf/turf";
 import {
   getAssetById,
   getIssuesForAsset,
+  presidioAssets,
+  type DemoAsset,
   type DemoIssue,
   type LngLat,
   seedIssues,
@@ -52,6 +54,27 @@ export function getNearbyOpenIssues(
   });
 
   return sortIssuesByOperationalPriority(nearbyIssues);
+}
+
+export function getNearbyAssets(
+  assetId: string,
+  assets: DemoAsset[] = presidioAssets,
+  radiusMeters = 125,
+) {
+  const asset = getAssetById(assetId);
+
+  if (!asset) {
+    return [];
+  }
+
+  return assets
+    .filter((candidate) => candidate.id !== assetId)
+    .map((candidate) => ({
+      asset: candidate,
+      distanceMeters: metersBetween(asset.coordinates, candidate.coordinates),
+    }))
+    .filter((candidate) => candidate.distanceMeters <= radiusMeters)
+    .sort((left, right) => left.distanceMeters - right.distanceMeters);
 }
 
 export function buildAssetOperationsContext(assetId: string, issues = seedIssues) {

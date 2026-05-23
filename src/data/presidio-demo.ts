@@ -20,6 +20,7 @@ export type AssetGeometry =
 
 export type DemoAsset = {
   id: string;
+  fieldId: string;
   name: string;
   type: AssetType;
   status: AssetStatus;
@@ -80,6 +81,7 @@ export const PRESIDIO_COURSE = {
 export const presidioAssets: DemoAsset[] = [
   {
     id: "PGC-CTRL-A",
+    fieldId: "controller-a",
     name: "North Loop Controller A",
     type: "controller",
     status: "healthy",
@@ -99,6 +101,7 @@ export const presidioAssets: DemoAsset[] = [
   },
   {
     id: "PGC-VLV-07",
+    fieldId: "valve-3g",
     name: "Hole 3 Green Valve Box",
     type: "valve",
     status: "watch",
@@ -119,6 +122,7 @@ export const presidioAssets: DemoAsset[] = [
   },
   {
     id: "PGC-SH-014",
+    fieldId: "head-1f1",
     name: "Hole 2 Green Rotor 014",
     type: "sprinkler",
     status: "service",
@@ -140,6 +144,7 @@ export const presidioAssets: DemoAsset[] = [
   },
   {
     id: "PGC-SH-027",
+    fieldId: "head-4f2",
     name: "Hole 4 Fairway Head 027",
     type: "sprinkler",
     status: "healthy",
@@ -161,6 +166,7 @@ export const presidioAssets: DemoAsset[] = [
   },
   {
     id: "PGC-SH-033",
+    fieldId: "head-5r1",
     name: "Hole 5 Rough Head 033",
     type: "sprinkler",
     status: "watch",
@@ -182,6 +188,7 @@ export const presidioAssets: DemoAsset[] = [
   },
   {
     id: "PGC-SH-041",
+    fieldId: "head-7t1",
     name: "Hole 7 Tee Rotor 041",
     type: "sprinkler",
     status: "healthy",
@@ -203,6 +210,7 @@ export const presidioAssets: DemoAsset[] = [
   },
   {
     id: "PGC-LP-03",
+    fieldId: "pipe-2g-lateral",
     name: "Hole 2 Green Lateral Pipe",
     type: "pipe",
     status: "service",
@@ -228,6 +236,7 @@ export const presidioAssets: DemoAsset[] = [
   },
   {
     id: "PGC-LP-05",
+    fieldId: "pipe-4f-lateral",
     name: "Hole 4 Fairway Lateral Pipe",
     type: "pipe",
     status: "healthy",
@@ -353,6 +362,7 @@ export function buildAssetFeatureCollection(
       geometry: asset.geometry,
       properties: {
         assetId: asset.id,
+        fieldId: asset.fieldId,
         assetType: asset.type,
         name: asset.name,
         zone: asset.zone,
