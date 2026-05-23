@@ -97,7 +97,10 @@ export function DailyPlanPanel({
       </div>
 
       {error ? (
-        <p className="mb-3 border border-red-500 bg-red-950/70 p-3 text-sm text-red-100">
+        <p
+          className="mb-3 border border-red-500 bg-red-950/70 p-3 text-sm text-red-100"
+          role="alert"
+        >
           <AlertTriangle className="mr-2 inline h-4 w-4" aria-hidden />
           {error}
         </p>

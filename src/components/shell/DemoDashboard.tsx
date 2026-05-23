@@ -127,6 +127,9 @@ export function DemoDashboard() {
     Boolean(selectedAssetId) && attachedPhoto?.assetId === selectedAssetId;
   const isAnalyzing = analysisStatus === "running";
   const isPrioritizing = prioritizationStatus === "running";
+  const canUploadPhoto = Boolean(
+    selectedAssetId && !isAnalyzing && !isPrioritizing,
+  );
   const canAnalyze = Boolean(
     selectedAssetId && hasSelectedPhoto && !isAnalyzing && !isPrioritizing,
   );
@@ -154,7 +157,13 @@ export function DemoDashboard() {
   const handleAnalyze = useCallback(async () => {
     const selectedAsset = selectedAssetId ? getAssetById(selectedAssetId) : null;
 
-    if (!selectedAsset || !attachedPhoto || attachedPhoto.assetId !== selectedAssetId) {
+    if (
+      isAnalyzing ||
+      isPrioritizing ||
+      !selectedAsset ||
+      !attachedPhoto ||
+      attachedPhoto.assetId !== selectedAssetId
+    ) {
       return;
     }
 
@@ -211,6 +220,8 @@ export function DemoDashboard() {
     attachedPhoto,
     completeAnalysis,
     failAnalysis,
+    isAnalyzing,
+    isPrioritizing,
     selectedAssetId,
     startAnalysis,
     superintendentNote,
@@ -228,6 +239,10 @@ export function DemoDashboard() {
   );
 
   const handlePrioritize = useCallback(async () => {
+    if (!canPrioritize) {
+      return;
+    }
+
     startPrioritization();
 
     try {
@@ -286,6 +301,7 @@ export function DemoDashboard() {
     failPrioritization,
     generatedWorkOrders,
     issues,
+    canPrioritize,
     selectAsset,
     startPrioritization,
   ]);
@@ -315,11 +331,12 @@ export function DemoDashboard() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-[1680px] gap-4 px-5 py-5 xl:grid-cols-[310px_minmax(0,1fr)_390px]">
+      <main className="mx-auto grid max-w-[1680px] gap-4 px-5 py-5 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)_400px]">
         <div className="space-y-4">
           <LayerPanel
             layers={layers}
             selectedAssetId={selectedAssetId}
+            canUploadPhoto={canUploadPhoto}
             canAnalyze={canAnalyze}
             isAnalyzing={isAnalyzing}
             canPrioritize={canPrioritize}
@@ -361,20 +378,22 @@ export function DemoDashboard() {
           onMapHealthChange={handleMapHealthChange}
         />
 
-        <AssetDetailDrawer
-          selectedAssetId={selectedAssetId}
-          issues={issues}
-          attachedPhoto={attachedPhoto}
-          superintendentNote={superintendentNote}
-          analysisStatus={analysisStatus}
-          triageResult={triageResult}
-          analysisError={analysisError}
-          analysisTrace={analysisTrace}
-          analysisModelDetails={analysisModelDetails}
-          activeWorkOrder={activeWorkOrder}
-          activityLog={activityLog}
-          onNoteChange={setSuperintendentNote}
-        />
+        <div className="lg:col-span-2 xl:col-span-1">
+          <AssetDetailDrawer
+            selectedAssetId={selectedAssetId}
+            issues={issues}
+            attachedPhoto={attachedPhoto}
+            superintendentNote={superintendentNote}
+            analysisStatus={analysisStatus}
+            triageResult={triageResult}
+            analysisError={analysisError}
+            analysisTrace={analysisTrace}
+            analysisModelDetails={analysisModelDetails}
+            activeWorkOrder={activeWorkOrder}
+            activityLog={activityLog}
+            onNoteChange={setSuperintendentNote}
+          />
+        </div>
       </main>
     </div>
   );

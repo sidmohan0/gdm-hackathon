@@ -183,12 +183,18 @@ export function AssetDetailDrawer({
           Gemini triage
         </h3>
         {analysisStatus === "running" ? (
-          <p className="mt-3 border border-slate-800 bg-slate-900 p-3 text-sm text-slate-300">
+          <p
+            className="mt-3 border border-slate-800 bg-slate-900 p-3 text-sm text-slate-300"
+            aria-live="polite"
+          >
             Analysis running.
           </p>
         ) : null}
         {analysisError ? (
-          <p className="mt-3 border border-red-500 bg-red-950/70 p-3 text-sm text-red-100">
+          <p
+            className="mt-3 border border-red-500 bg-red-950/70 p-3 text-sm text-red-100"
+            role="alert"
+          >
             {analysisError}
           </p>
         ) : null}

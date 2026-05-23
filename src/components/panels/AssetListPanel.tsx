@@ -54,6 +54,9 @@ export function AssetListPanel({
                 <span className="mt-1 block truncate text-xs text-slate-400">
                   {asset.id} / Hole {asset.hole}
                 </span>
+                <span className="mt-1 block truncate text-xs capitalize text-slate-500">
+                  {asset.type} / {asset.status}
+                </span>
               </span>
               <span
                 className="h-2.5 w-2.5 rounded-full"

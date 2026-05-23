@@ -450,7 +450,10 @@ export function CourseMap({
   }, [layers, styleReady]);
 
   return (
-    <section className="relative h-full min-h-[520px] overflow-hidden border border-slate-700 bg-slate-950">
+    <section
+      className="relative h-full min-h-[620px] overflow-hidden border border-slate-700 bg-slate-950"
+      aria-label="Course operations map"
+    >
       <div
         ref={containerRef}
         className="absolute inset-0"
@@ -464,7 +467,10 @@ export function CourseMap({
         <span>{PRESIDIO_COURSE.name}</span>
       </div>
       {visibleMapError ? (
-        <div className="absolute inset-x-6 top-24 border border-red-400 bg-red-950/90 p-4 text-sm text-red-50 shadow-xl">
+        <div
+          className="absolute inset-x-6 top-24 border border-red-400 bg-red-950/90 p-4 text-sm text-red-50 shadow-xl"
+          role="alert"
+        >
           <div className="mb-2 flex items-center gap-2 font-semibold">
             <AlertTriangle className="h-4 w-4" aria-hidden />
             Map unavailable

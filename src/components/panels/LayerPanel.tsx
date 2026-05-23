@@ -14,6 +14,7 @@ import type { LayerVisibility } from "@/lib/map-style";
 type LayerPanelProps = {
   layers: LayerVisibility;
   selectedAssetId: string | null;
+  canUploadPhoto: boolean;
   canAnalyze: boolean;
   isAnalyzing: boolean;
   canPrioritize: boolean;
@@ -61,6 +62,7 @@ const layerLabels: Array<{
 export function LayerPanel({
   layers,
   selectedAssetId,
+  canUploadPhoto,
   canAnalyze,
   isAnalyzing,
   canPrioritize,
@@ -122,7 +124,8 @@ export function LayerPanel({
           <button
             type="button"
             onClick={onUploadPhoto}
-            disabled={!selectedAssetId}
+            disabled={!canUploadPhoto}
+            aria-label="Upload photo"
             className="inline-flex h-11 items-center justify-center gap-2 border border-emerald-500 bg-emerald-500 px-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
           >
             <Upload className="h-4 w-4" aria-hidden />
@@ -138,7 +141,7 @@ export function LayerPanel({
               type="file"
               accept="image/*"
               capture="environment"
-              disabled={!selectedAssetId}
+              disabled={!selectedAssetId || !canUploadPhoto}
               className="sr-only"
               onChange={(event) => {
                 const file = event.currentTarget.files?.[0];
@@ -155,6 +158,8 @@ export function LayerPanel({
           type="button"
           onClick={onAnalyze}
           disabled={!canAnalyze || isAnalyzing}
+          aria-busy={isAnalyzing}
+          aria-label="Analyze"
           className="inline-flex h-11 items-center justify-center gap-2 border border-slate-700 bg-slate-900 px-3 text-sm font-semibold text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:text-slate-600"
         >
           {isAnalyzing ? (
@@ -162,12 +167,14 @@ export function LayerPanel({
           ) : (
             <Brain className="h-4 w-4" aria-hidden />
           )}
-          {isAnalyzing ? "Analyzing" : "Analyze"}
+          Analyze
         </button>
         <button
           type="button"
           onClick={onPrioritize}
           disabled={!canPrioritize || isPrioritizing}
+          aria-busy={isPrioritizing}
+          aria-label="Prioritize"
           className="inline-flex h-11 items-center justify-center gap-2 border border-slate-700 bg-slate-900 px-3 text-sm font-semibold text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:text-slate-600"
         >
           {isPrioritizing ? (
@@ -175,7 +182,7 @@ export function LayerPanel({
           ) : (
             <CloudSun className="h-4 w-4" aria-hidden />
           )}
-          {isPrioritizing ? "Prioritizing" : "Prioritize"}
+          Prioritize
         </button>
       </div>
     </section>

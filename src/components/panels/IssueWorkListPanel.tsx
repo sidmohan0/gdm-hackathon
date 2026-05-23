@@ -62,6 +62,9 @@ export function IssueWorkListPanel({
                 <span className="mt-1 block truncate text-xs text-slate-400">
                   {issue.id} / {issue.status} / {asset?.fieldId ?? issue.assetId}
                 </span>
+                <span className="mt-1 block truncate text-xs capitalize text-slate-500">
+                  Severity {issue.severity}
+                </span>
                 <span className="mt-2 block text-xs text-slate-500">
                   {issue.summary}
                 </span>
@@ -69,6 +72,7 @@ export function IssueWorkListPanel({
               <span
                 className="flex h-8 w-8 shrink-0 items-center justify-center border border-slate-700 text-xs font-semibold text-slate-300 data-[ranked=true]:border-emerald-500 data-[ranked=true]:text-emerald-200"
                 data-ranked={Boolean(rank)}
+                aria-label={rank ? `Rank ${rank}` : `Score ${issue.priorityScore}`}
               >
                 {rank ?? issue.priorityScore}
               </span>
