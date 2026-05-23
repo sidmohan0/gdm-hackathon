@@ -18,12 +18,14 @@ import {
   severityColors,
   type LayerVisibility,
 } from "@/lib/map-style";
+import type { MapboxClientHealth } from "@/lib/readiness";
 
 type CourseMapProps = {
   selectedAssetId: string | null;
   issues: DemoIssue[];
   layers: LayerVisibility;
   onAssetSelect: (assetId: string) => void;
+  onMapHealthChange: (health: MapboxClientHealth) => void;
 };
 
 const clickableLayerIds = [
@@ -55,10 +57,12 @@ export function CourseMap({
   issues,
   layers,
   onAssetSelect,
+  onMapHealthChange,
 }: CourseMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const onAssetSelectRef = useRef(onAssetSelect);
+  const onMapHealthChangeRef = useRef(onMapHealthChange);
   const selectedAssetIdRef = useRef(selectedAssetId);
   const [styleReady, setStyleReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -80,12 +84,26 @@ export function CourseMap({
   }, [onAssetSelect]);
 
   useEffect(() => {
+    onMapHealthChangeRef.current = onMapHealthChange;
+  }, [onMapHealthChange]);
+
+  useEffect(() => {
     issueCollectionRef.current = issueCollection;
   }, [issueCollection]);
 
   useEffect(() => {
     selectedAssetIdRef.current = selectedAssetId;
   }, [selectedAssetId]);
+
+  useEffect(() => {
+    if (tokenError) {
+      onMapHealthChangeRef.current({
+        status: "red",
+        reason: tokenError,
+        checkedAt: new Date().toISOString(),
+      });
+    }
+  }, [tokenError]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
@@ -96,6 +114,11 @@ export function CourseMap({
       return;
     }
 
+    onMapHealthChangeRef.current({
+      status: "yellow",
+      reason: "Mapbox loading.",
+      checkedAt: new Date().toISOString(),
+    });
     mapboxgl.accessToken = mapboxToken;
 
     const mapContainer = containerRef.current;
@@ -108,9 +131,18 @@ export function CourseMap({
       bearing: PRESIDIO_INITIAL_VIEW.bearing,
       attributionControl: false,
     });
-    const resizeObserver = new ResizeObserver(() => map.resize());
+    let isMounted = true;
+    const resizeObserver = new ResizeObserver(() => {
+      if (isMounted) {
+        map.resize();
+      }
+    });
     resizeObserver.observe(mapContainer);
-    requestAnimationFrame(() => map.resize());
+    requestAnimationFrame(() => {
+      if (isMounted) {
+        map.resize();
+      }
+    });
 
     mapRef.current = map;
     map.addControl(
@@ -260,14 +292,25 @@ export function CourseMap({
       });
 
       setStyleReady(true);
+      onMapHealthChangeRef.current({
+        status: "green",
+        reason: "Mapbox satellite map loaded.",
+        checkedAt: new Date().toISOString(),
+      });
     });
 
     map.on("error", (event) => {
       const message = event.error?.message ?? "Mapbox failed to render.";
       setMapError(message);
+      onMapHealthChangeRef.current({
+        status: "red",
+        reason: message,
+        checkedAt: new Date().toISOString(),
+      });
     });
 
     return () => {
+      isMounted = false;
       resizeObserver.disconnect();
       setStyleReady(false);
       map.remove();
@@ -282,7 +325,14 @@ export function CourseMap({
       return;
     }
 
-    const source = map.getSource("gdm-issues") as mapboxgl.GeoJSONSource;
+    const source = map.getSource("gdm-issues") as
+      | mapboxgl.GeoJSONSource
+      | undefined;
+
+    if (!source) {
+      return;
+    }
+
     source.setData(issueCollection as GeoJSON.FeatureCollection);
   }, [issueCollection, styleReady]);
 

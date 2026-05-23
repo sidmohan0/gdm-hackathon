@@ -1,21 +1,29 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { CourseMap } from "@/components/map/CourseMap";
 import { AssetDetailDrawer } from "@/components/panels/AssetDetailDrawer";
 import { AssetListPanel } from "@/components/panels/AssetListPanel";
 import { LayerPanel } from "@/components/panels/LayerPanel";
+import { ReadinessDot } from "@/components/shell/ReadinessDot";
+import { WeatherChip } from "@/components/shell/WeatherChip";
 import { PRESIDIO_COURSE, presidioAssets } from "@/data/presidio-demo";
 import { useDemoStore } from "@/lib/demo-store";
 import {
+  createCheckingReadiness,
+  type MapboxClientHealth,
+} from "@/lib/readiness";
+import {
   defaultLayerVisibility,
-  severityColors,
   type LayerVisibility,
 } from "@/lib/map-style";
 
 export function DemoDashboard() {
   const [layers, setLayers] = useState<LayerVisibility>(defaultLayerVisibility);
+  const [mapboxHealth, setMapboxHealth] = useState<MapboxClientHealth>(
+    createCheckingReadiness("Mapbox loading."),
+  );
   const selectedAssetId = useDemoStore((state) => state.selectedAssetId);
   const issues = useDemoStore((state) => state.issues);
   const attachedPhotoAssetId = useDemoStore(
@@ -30,9 +38,10 @@ export function DemoDashboard() {
     () => issues.filter((issue) => issue.status !== "resolved").length,
     [issues],
   );
-  const hasCriticalIssue = issues.some(
-    (issue) => issue.severity === "critical" && issue.status !== "resolved",
-  );
+  const handleMapHealthChange = useCallback((health: MapboxClientHealth) => {
+    setMapboxHealth(health);
+  }, []);
+
   return (
     <div className="min-h-screen bg-neutral-950 text-slate-100">
       <header className="border-b border-slate-800 bg-neutral-950 px-5 py-4">
@@ -52,18 +61,8 @@ export function DemoDashboard() {
             <span className="border border-slate-700 bg-slate-900 px-3 py-2 text-slate-300">
               {activeIssueCount} open issues
             </span>
-            <span className="inline-flex items-center gap-2 border border-slate-700 bg-slate-900 px-3 py-2 text-slate-300">
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{
-                  background: hasCriticalIssue
-                    ? severityColors.critical
-                    : severityColors.low,
-                }}
-                aria-hidden
-              />
-              Local demo
-            </span>
+            <ReadinessDot mapboxHealth={mapboxHealth} />
+            <WeatherChip />
           </div>
         </div>
       </header>
@@ -89,6 +88,7 @@ export function DemoDashboard() {
           issues={issues}
           layers={layers}
           onAssetSelect={selectAsset}
+          onMapHealthChange={handleMapHealthChange}
         />
 
         <AssetDetailDrawer
