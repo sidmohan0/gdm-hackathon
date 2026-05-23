@@ -1,0 +1,359 @@
+"use client";
+
+import { AlertTriangle, MapPinned } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import mapboxgl, { type ExpressionSpecification } from "mapbox-gl";
+
+import {
+  buildAssetFeatureCollection,
+  buildIssueFeatureCollection,
+  PRESIDIO_COURSE,
+  type DemoIssue,
+} from "@/data/presidio-demo";
+import {
+  assetColors,
+  layerIds,
+  MAPBOX_STYLE,
+  PRESIDIO_INITIAL_VIEW,
+  severityColors,
+  type LayerVisibility,
+} from "@/lib/map-style";
+
+type CourseMapProps = {
+  selectedAssetId: string | null;
+  issues: DemoIssue[];
+  layers: LayerVisibility;
+  onAssetSelect: (assetId: string) => void;
+};
+
+const clickableLayerIds = [
+  layerIds.assetSprinklers,
+  layerIds.assetValves,
+  layerIds.assetControllers,
+  layerIds.assetPipes,
+  layerIds.issueMarkers,
+];
+
+function severityColorExpression(): ExpressionSpecification {
+  return [
+    "match",
+    ["get", "severity"],
+    "critical",
+    severityColors.critical,
+    "high",
+    severityColors.high,
+    "medium",
+    severityColors.medium,
+    "low",
+    severityColors.low,
+    "#ffffff",
+  ] as ExpressionSpecification;
+}
+
+export function CourseMap({
+  selectedAssetId,
+  issues,
+  layers,
+  onAssetSelect,
+}: CourseMapProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<mapboxgl.Map | null>(null);
+  const onAssetSelectRef = useRef(onAssetSelect);
+  const selectedAssetIdRef = useRef(selectedAssetId);
+  const [styleReady, setStyleReady] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+
+  const assetCollection = useMemo(() => buildAssetFeatureCollection(), []);
+  const issueCollection = useMemo(
+    () => buildIssueFeatureCollection(issues),
+    [issues],
+  );
+  const issueCollectionRef = useRef(issueCollection);
+  const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  const tokenError = mapboxToken
+    ? null
+    : "Mapbox token missing. Add NEXT_PUBLIC_MAPBOX_TOKEN to .env and restart the dev server.";
+  const visibleMapError = tokenError ?? mapError;
+
+  useEffect(() => {
+    onAssetSelectRef.current = onAssetSelect;
+  }, [onAssetSelect]);
+
+  useEffect(() => {
+    issueCollectionRef.current = issueCollection;
+  }, [issueCollection]);
+
+  useEffect(() => {
+    selectedAssetIdRef.current = selectedAssetId;
+  }, [selectedAssetId]);
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) {
+      return;
+    }
+
+    if (!mapboxToken) {
+      return;
+    }
+
+    mapboxgl.accessToken = mapboxToken;
+
+    const mapContainer = containerRef.current;
+    const map = new mapboxgl.Map({
+      container: mapContainer,
+      style: MAPBOX_STYLE,
+      center: PRESIDIO_INITIAL_VIEW.center,
+      zoom: PRESIDIO_INITIAL_VIEW.zoom,
+      pitch: PRESIDIO_INITIAL_VIEW.pitch,
+      bearing: PRESIDIO_INITIAL_VIEW.bearing,
+      attributionControl: false,
+    });
+    const resizeObserver = new ResizeObserver(() => map.resize());
+    resizeObserver.observe(mapContainer);
+    requestAnimationFrame(() => map.resize());
+
+    mapRef.current = map;
+    map.addControl(
+      new mapboxgl.NavigationControl({
+        visualizePitch: true,
+      }),
+      "bottom-right",
+    );
+    map.addControl(
+      new mapboxgl.AttributionControl({
+        compact: true,
+      }),
+      "bottom-left",
+    );
+
+    map.on("load", () => {
+      map.addSource("gdm-assets", {
+        type: "geojson",
+        data: assetCollection as GeoJSON.FeatureCollection,
+      });
+      map.addSource("gdm-issues", {
+        type: "geojson",
+        data: issueCollectionRef.current as GeoJSON.FeatureCollection,
+      });
+
+      map.addLayer({
+        id: layerIds.assetPipes,
+        type: "line",
+        source: "gdm-assets",
+        filter: ["==", ["get", "assetType"], "pipe"],
+        paint: {
+          "line-color": assetColors.pipe,
+          "line-opacity": 0.9,
+          "line-width": 5,
+        },
+      });
+
+      map.addLayer({
+        id: layerIds.selectedPipes,
+        type: "line",
+        source: "gdm-assets",
+        filter: [
+          "all",
+          ["==", ["get", "assetType"], "pipe"],
+          ["==", ["get", "assetId"], selectedAssetIdRef.current ?? "__none__"],
+        ],
+        paint: {
+          "line-color": "#ffffff",
+          "line-opacity": 0.95,
+          "line-width": 10,
+        },
+      });
+
+      map.addLayer({
+        id: layerIds.assetSprinklers,
+        type: "circle",
+        source: "gdm-assets",
+        filter: ["==", ["get", "assetType"], "sprinkler"],
+        paint: {
+          "circle-color": assetColors.sprinkler,
+          "circle-radius": 7,
+          "circle-stroke-color": "#052e1c",
+          "circle-stroke-width": 2,
+        },
+      });
+
+      map.addLayer({
+        id: layerIds.assetValves,
+        type: "circle",
+        source: "gdm-assets",
+        filter: ["==", ["get", "assetType"], "valve"],
+        paint: {
+          "circle-color": assetColors.valve,
+          "circle-radius": 8,
+          "circle-stroke-color": "#451a03",
+          "circle-stroke-width": 2,
+        },
+      });
+
+      map.addLayer({
+        id: layerIds.assetControllers,
+        type: "circle",
+        source: "gdm-assets",
+        filter: ["==", ["get", "assetType"], "controller"],
+        paint: {
+          "circle-color": assetColors.controller,
+          "circle-radius": 9,
+          "circle-stroke-color": "#2e1065",
+          "circle-stroke-width": 2,
+        },
+      });
+
+      map.addLayer({
+        id: layerIds.selectedPoints,
+        type: "circle",
+        source: "gdm-assets",
+        filter: [
+          "all",
+          ["!=", ["get", "assetType"], "pipe"],
+          ["==", ["get", "assetId"], selectedAssetIdRef.current ?? "__none__"],
+        ],
+        paint: {
+          "circle-color": "#ffffff",
+          "circle-radius": 14,
+          "circle-opacity": 0.2,
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 3,
+        },
+      });
+
+      map.addLayer({
+        id: layerIds.issueMarkers,
+        type: "circle",
+        source: "gdm-issues",
+        paint: {
+          "circle-color": severityColorExpression(),
+          "circle-radius": 9,
+          "circle-stroke-color": "#111827",
+          "circle-stroke-width": 2,
+        },
+      });
+
+      map.on("click", (event) => {
+        const visibleClickableLayers = clickableLayerIds.filter((layerId) =>
+          map.getLayer(layerId),
+        );
+        const [feature] = map.queryRenderedFeatures(event.point, {
+          layers: visibleClickableLayers,
+        });
+        const properties = feature?.properties as
+          | { assetId?: string }
+          | undefined;
+
+        if (properties?.assetId) {
+          onAssetSelectRef.current(properties.assetId);
+        }
+      });
+
+      map.on("mousemove", (event) => {
+        const visibleClickableLayers = clickableLayerIds.filter((layerId) =>
+          map.getLayer(layerId),
+        );
+        const features = map.queryRenderedFeatures(event.point, {
+          layers: visibleClickableLayers,
+        });
+        map.getCanvas().style.cursor = features.length > 0 ? "pointer" : "";
+      });
+
+      setStyleReady(true);
+    });
+
+    map.on("error", (event) => {
+      const message = event.error?.message ?? "Mapbox failed to render.";
+      setMapError(message);
+    });
+
+    return () => {
+      resizeObserver.disconnect();
+      setStyleReady(false);
+      map.remove();
+      mapRef.current = null;
+    };
+  }, [assetCollection, mapboxToken]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+
+    if (!map || !styleReady) {
+      return;
+    }
+
+    const source = map.getSource("gdm-issues") as mapboxgl.GeoJSONSource;
+    source.setData(issueCollection as GeoJSON.FeatureCollection);
+  }, [issueCollection, styleReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+
+    if (!map || !styleReady) {
+      return;
+    }
+
+    map.setFilter(layerIds.selectedPipes, [
+      "all",
+      ["==", ["get", "assetType"], "pipe"],
+      ["==", ["get", "assetId"], selectedAssetId ?? "__none__"],
+    ]);
+    map.setFilter(layerIds.selectedPoints, [
+      "all",
+      ["!=", ["get", "assetType"], "pipe"],
+      ["==", ["get", "assetId"], selectedAssetId ?? "__none__"],
+    ]);
+  }, [selectedAssetId, styleReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+
+    if (!map || !styleReady) {
+      return;
+    }
+
+    const visibilityByLayer = new Map<string, boolean>([
+      [layerIds.assetPipes, layers.pipes],
+      [layerIds.assetSprinklers, layers.sprinklers],
+      [layerIds.assetValves, layers.valves],
+      [layerIds.assetControllers, layers.controllers],
+      [layerIds.issueMarkers, layers.issues],
+    ]);
+
+    visibilityByLayer.forEach((isVisible, layerId) => {
+      if (map.getLayer(layerId)) {
+        map.setLayoutProperty(
+          layerId,
+          "visibility",
+          isVisible ? "visible" : "none",
+        );
+      }
+    });
+  }, [layers, styleReady]);
+
+  return (
+    <section className="relative h-full min-h-[520px] overflow-hidden border border-slate-700 bg-slate-950">
+      <div
+        ref={containerRef}
+        className="absolute inset-0"
+        style={{
+          inset: 0,
+          position: "absolute",
+        }}
+      />
+      <div className="pointer-events-none absolute left-4 top-4 flex items-center gap-2 rounded border border-slate-600 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 backdrop-blur">
+        <MapPinned className="h-4 w-4 text-emerald-300" aria-hidden />
+        <span>{PRESIDIO_COURSE.name}</span>
+      </div>
+      {visibleMapError ? (
+        <div className="absolute inset-x-6 top-24 border border-red-400 bg-red-950/90 p-4 text-sm text-red-50 shadow-xl">
+          <div className="mb-2 flex items-center gap-2 font-semibold">
+            <AlertTriangle className="h-4 w-4" aria-hidden />
+            Map unavailable
+          </div>
+          <p>{visibleMapError}</p>
+        </div>
+      ) : null}
+    </section>
+  );
+}
