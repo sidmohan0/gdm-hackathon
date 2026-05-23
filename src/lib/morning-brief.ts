@@ -46,8 +46,9 @@ export const morningBriefCrewPlanItemSchema = z.object({
   window: z.enum(morningBriefWindowValues),
   crew: z.string().min(3),
   focus: z.string().min(8),
-  relatedIssueIds: z.array(z.string().min(1)).min(1),
+  relatedIssueIds: z.array(z.string().min(1)).default([]),
   relatedWorkOrderIds: z.array(z.string().min(1)).default([]),
+  relatedAssetIds: z.array(z.string().min(1)).default([]),
 });
 
 export const morningBriefRiskSchema = z.object({
@@ -202,7 +203,17 @@ export type MorningBriefPayload = {
 };
 
 export type MorningBriefReferenceContext = {
-  issues: Array<Pick<DemoIssue, "id" | "assetId" | "workOrderId">>;
+  issues: Array<
+    Pick<
+      DemoIssue,
+      | "id"
+      | "assetId"
+      | "workOrderId"
+      | "title"
+      | "summary"
+      | "recommendedAction"
+    >
+  >;
   workOrders: Array<Pick<GeneratedWorkOrder, "id" | "issueId" | "assetId">>;
   assetIds: string[];
 };
@@ -318,6 +329,10 @@ export const morningBriefResponseJsonSchema = {
             type: "array",
             items: { type: "string" },
           },
+          relatedAssetIds: {
+            type: "array",
+            items: { type: "string" },
+          },
         },
         required: [
           "sequence",
@@ -326,6 +341,7 @@ export const morningBriefResponseJsonSchema = {
           "focus",
           "relatedIssueIds",
           "relatedWorkOrderIds",
+          "relatedAssetIds",
         ],
       },
     },
@@ -367,6 +383,345 @@ function assertKnownId(
   if (!condition) {
     throw new Error(message);
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function numberValue(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+function arrayValue(value: unknown) {
+  return Array.isArray(value) ? value : [];
+}
+
+function crewPlanItems(value: unknown) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  return Object.entries(value).map(([window, action]) => ({
+    window,
+    action,
+  }));
+}
+
+function textForIdExtraction(value: unknown) {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (isRecord(value) || Array.isArray(value)) {
+    return JSON.stringify(value);
+  }
+
+  return "";
+}
+
+function extractKnownIds(text: string, allowedIds: Iterable<string>) {
+  return [...allowedIds].filter((id) => text.includes(id));
+}
+
+function normalizeStringArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is string => Boolean(stringValue(item)));
+}
+
+function joinedStringValue(value: unknown) {
+  if (Array.isArray(value)) {
+    const joined = normalizeStringArray(value).join(" ");
+
+    return joined || undefined;
+  }
+
+  return stringValue(value);
+}
+
+function normalizeWindowValue(value: unknown, index: number) {
+  const normalized = stringValue(value)
+    ?.toLowerCase()
+    .replace(/[\s-]+/g, "_");
+
+  if (normalized === "morning") {
+    return "morning";
+  }
+
+  if (normalized === "midday" || normalized === "mid_day") {
+    return "midday";
+  }
+
+  if (
+    normalized === "after_first_inspection" ||
+    normalized === "after_inspection" ||
+    normalized === "after_first_check"
+  ) {
+    return "after_first_inspection";
+  }
+
+  return morningBriefWindowValues[
+    Math.min(index, morningBriefWindowValues.length - 1)
+  ];
+}
+
+function normalizeMorningBriefCandidate(
+  candidate: unknown,
+  references: MorningBriefReferenceContext,
+) {
+  if (!isRecord(candidate)) {
+    return candidate;
+  }
+
+  const issueById = new Map(
+    references.issues.map((issue) => [issue.id, issue] as const),
+  );
+  const issueIds = references.issues.map((issue) => issue.id);
+  const assetIds = references.assetIds;
+  const workOrderIds = references.workOrders.map((workOrder) => workOrder.id);
+  const topPriorities = arrayValue(candidate.topPriorities).map((item, index) => {
+    if (!isRecord(item)) {
+      return item;
+    }
+
+    const text = textForIdExtraction(item);
+    const issueId =
+      stringValue(item.issueId) ?? extractKnownIds(text, issueIds)[0];
+    const issue = issueId ? issueById.get(issueId) : undefined;
+    const assetId =
+      stringValue(item.assetId) ??
+      (issue?.assetId && text.includes(issue.assetId)
+        ? issue.assetId
+        : undefined) ??
+      extractKnownIds(text, assetIds)[0] ??
+      issue?.assetId;
+    const workOrderId =
+      stringValue(item.workOrderId) ?? extractKnownIds(text, workOrderIds)[0];
+    const explicitRecommendedAction =
+      stringValue(item.recommendedAction) ??
+      joinedStringValue(item.recommendedActions) ??
+      stringValue(item.action) ??
+      stringValue(item.nextAction) ??
+      stringValue(item.nextStep) ??
+      stringValue(item.priority) ??
+      stringValue(item.task) ??
+      joinedStringValue(item.tasks) ??
+      stringValue(item.recommendation) ??
+      joinedStringValue(item.recommendations) ??
+      stringValue(item.summary);
+    const recommendedAction =
+      explicitRecommendedAction ?? issue?.recommendedAction;
+
+    return {
+      ...item,
+      rank: numberValue(item.rank) ?? index + 1,
+      issueId,
+      assetId,
+      workOrderId,
+      title: stringValue(item.title) ?? issue?.title ?? `Priority ${index + 1}`,
+      reason:
+        stringValue(item.reason) ??
+        stringValue(item.rationale) ??
+        stringValue(item.why) ??
+        stringValue(item.summary) ??
+        explicitRecommendedAction ??
+        issue?.summary ??
+        recommendedAction,
+      recommendedAction,
+    };
+  });
+  const fallbackIssueIds = topPriorities
+    .map((item) => (isRecord(item) ? stringValue(item.issueId) : undefined))
+    .filter((issueId): issueId is string => Boolean(issueId));
+  const fallbackAssetIds = topPriorities
+    .map((item) => (isRecord(item) ? stringValue(item.assetId) : undefined))
+    .filter((assetId): assetId is string => Boolean(assetId));
+  const fallbackWorkOrderIds = topPriorities
+    .map((item) => (isRecord(item) ? stringValue(item.workOrderId) : undefined))
+    .filter((workOrderId): workOrderId is string => Boolean(workOrderId));
+
+  return {
+    ...candidate,
+    topPriorities,
+    weatherWatch: normalizeWeatherWatch(candidate.weatherWatch),
+    crewPlan: crewPlanItems(candidate.crewPlan).map((item, index) =>
+      normalizeCrewPlanItem({
+        item,
+        index,
+        issueIds: references.issues.map((issue) => issue.id),
+        assetIds,
+        workOrderIds,
+        fallbackIssueIds,
+        fallbackAssetIds,
+        fallbackWorkOrderIds,
+      }),
+    ),
+    risksToVerify: arrayValue(candidate.risksToVerify).map((item) =>
+      normalizeRiskItem({
+        item,
+        issueIds: references.issues.map((issue) => issue.id),
+        assetIds,
+        workOrderIds,
+        fallbackIssueIds,
+        fallbackAssetIds,
+        fallbackWorkOrderIds,
+      }),
+    ),
+  };
+}
+
+function normalizeWeatherWatch(value: unknown) {
+  if (!isRecord(value)) {
+    const summary =
+      stringValue(value) ?? "Weather context should be verified in the field.";
+
+    return {
+      summary,
+      concerns: [summary],
+    };
+  }
+
+  const concerns = normalizeStringArray(value.concerns);
+  const notes = stringValue(value.notes);
+  const metricSummary = Object.entries(value)
+    .filter(([key]) => !["summary", "concerns"].includes(key))
+    .map(([key, entry]) => `${key}: ${String(entry)}`)
+    .join("; ");
+  const summary =
+    stringValue(value.summary) ??
+    notes ??
+    (metricSummary ? `Weather context attached: ${metricSummary}` : undefined) ??
+    "Weather context is attached for superintendent review.";
+
+  return {
+    ...value,
+    summary,
+    concerns: concerns.length > 0 ? concerns : [notes ?? summary],
+  };
+}
+
+function normalizeCrewPlanItem({
+  item,
+  index,
+  issueIds,
+  assetIds,
+  workOrderIds,
+  fallbackIssueIds,
+  fallbackAssetIds,
+  fallbackWorkOrderIds,
+}: {
+  item: unknown;
+  index: number;
+  issueIds: string[];
+  assetIds: string[];
+  workOrderIds: string[];
+  fallbackIssueIds: string[];
+  fallbackAssetIds: string[];
+  fallbackWorkOrderIds: string[];
+}) {
+  if (!isRecord(item)) {
+    return item;
+  }
+
+  const text = textForIdExtraction(item);
+  const relatedIssueIds = [
+    ...new Set([
+      ...normalizeStringArray(item.relatedIssueIds),
+      ...extractKnownIds(text, issueIds),
+    ]),
+  ];
+  const relatedWorkOrderIds = [
+    ...new Set([
+      ...normalizeStringArray(item.relatedWorkOrderIds),
+      ...extractKnownIds(text, workOrderIds),
+    ]),
+  ];
+  const relatedAssetIds = [
+    ...new Set([
+      ...normalizeStringArray(item.relatedAssetIds),
+      ...extractKnownIds(text, assetIds),
+    ]),
+  ];
+
+  return {
+    ...item,
+    sequence: numberValue(item.sequence) ?? index + 1,
+    window: normalizeWindowValue(item.window, index),
+    crew: stringValue(item.crew) ?? stringValue(item.role),
+    focus:
+      stringValue(item.focus) ??
+      stringValue(item.activity) ??
+      stringValue(item.action) ??
+      stringValue(item.task) ??
+      joinedStringValue(item.tasks) ??
+      stringValue(item.summary),
+    relatedIssueIds:
+      relatedIssueIds.length > 0 ? relatedIssueIds : fallbackIssueIds,
+    relatedWorkOrderIds:
+      relatedWorkOrderIds.length > 0
+        ? relatedWorkOrderIds
+        : fallbackWorkOrderIds,
+    relatedAssetIds:
+      relatedAssetIds.length > 0 ? relatedAssetIds : fallbackAssetIds,
+  };
+}
+
+function normalizeRiskItem({
+  item,
+  issueIds,
+  assetIds,
+  workOrderIds,
+  fallbackIssueIds,
+  fallbackAssetIds,
+  fallbackWorkOrderIds,
+}: {
+  item: unknown;
+  issueIds: string[];
+  assetIds: string[];
+  workOrderIds: string[];
+  fallbackIssueIds: string[];
+  fallbackAssetIds: string[];
+  fallbackWorkOrderIds: string[];
+}) {
+  const record = isRecord(item) ? item : { risk: item };
+  const text = textForIdExtraction(item);
+
+  return {
+    ...record,
+    risk:
+      stringValue(record.risk) ??
+      stringValue(record.summary) ??
+      stringValue(item),
+    verificationStep:
+      stringValue(record.verificationStep) ??
+      stringValue(record.verify) ??
+      "Verify this condition in the field before acting on the brief.",
+    issueId:
+      stringValue(record.issueId) ??
+      extractKnownIds(text, issueIds)[0] ??
+      fallbackIssueIds[0],
+    assetId:
+      stringValue(record.assetId) ??
+      extractKnownIds(text, assetIds)[0] ??
+      fallbackAssetIds[0],
+    workOrderId:
+      stringValue(record.workOrderId) ??
+      extractKnownIds(text, workOrderIds)[0] ??
+      fallbackWorkOrderIds[0],
+  };
 }
 
 function fallbackRankIssues(issues: MorningBriefRequestIssue[]) {
@@ -585,7 +940,9 @@ export function validateMorningBriefResponse(
   candidate: unknown,
   references: MorningBriefReferenceContext,
 ) {
-  const parsed = morningBriefResponseSchema.parse(candidate);
+  const parsed = morningBriefResponseSchema.parse(
+    normalizeMorningBriefCandidate(candidate, references),
+  );
   const issueById = new Map(
     references.issues.map((issue) => [issue.id, issue] as const),
   );
@@ -638,6 +995,14 @@ export function validateMorningBriefResponse(
   }
 
   for (const crewPlan of parsed.crewPlan) {
+    if (
+      crewPlan.relatedIssueIds.length === 0 &&
+      crewPlan.relatedWorkOrderIds.length === 0 &&
+      crewPlan.relatedAssetIds.length === 0
+    ) {
+      throw new Error("Morning brief crew plan did not cite a known record.");
+    }
+
     for (const issueId of crewPlan.relatedIssueIds) {
       assertKnownId(
         issueById.has(issueId),
@@ -649,6 +1014,13 @@ export function validateMorningBriefResponse(
       assertKnownId(
         workOrderById.has(workOrderId),
         `Morning brief crew plan referenced unknown work order ${workOrderId}.`,
+      );
+    }
+
+    for (const assetId of crewPlan.relatedAssetIds) {
+      assertKnownId(
+        assetIds.has(assetId),
+        `Morning brief crew plan referenced unknown asset ${assetId}.`,
       );
     }
   }

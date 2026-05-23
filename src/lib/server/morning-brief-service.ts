@@ -140,7 +140,16 @@ function createModelDetails(
 
 function validationFailureMessage(error: unknown) {
   if (error instanceof ZodError) {
-    return "Managed-agent brief failed schema validation.";
+    const details = error.issues
+      .slice(0, 3)
+      .map((issue) => {
+        const path = issue.path.length > 0 ? issue.path.join(".") : "response";
+
+        return `${path}: ${issue.message}`;
+      })
+      .join("; ");
+
+    return `Managed-agent brief failed schema validation: ${details}.`;
   }
 
   return `Managed-agent brief failed validation: ${sanitizeError(error)}.`;
@@ -193,6 +202,9 @@ function buildReferenceContext(input: MorningBriefInput) {
         id: issue.id,
         assetId: issue.assetId,
         workOrderId: issue.workOrderId,
+        title: issue.title,
+        summary: issue.summary,
+        recommendedAction: issue.recommendedAction,
       })),
     workOrders: input.workOrders.map((workOrder) => ({
       id: workOrder.id,

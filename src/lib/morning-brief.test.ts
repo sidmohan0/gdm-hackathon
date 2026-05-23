@@ -209,6 +209,76 @@ describe("morning superintendent brief contract", () => {
     ).toThrow("unknown issue");
   });
 
+  it("normalizes managed-agent shorthand while preserving known ID checks", () => {
+    const result = validateMorningBriefResponse(
+      {
+        openingSummary:
+          "This plan is based on current severity and existing issue order.",
+        topPriorities: [
+          {
+            issueId: "PGC-ISS-101",
+            assetId: "PGC-SH-014",
+            title: "Rotor head stuck high beside No. 2 green",
+            recommendedAction:
+              "Flag the head, lower assembly, and inspect riser threads.",
+          },
+        ],
+        weatherWatch: {
+          status: "available",
+          notes:
+            "Wind may affect spray patterns; verify field conditions first.",
+        },
+        crewPlan: [
+          {
+            window: "morning",
+            role: "irrigation tech",
+            activity:
+              "Inspect PGC-SH-014 and lower the proud rotor assembly.",
+          },
+        ],
+        risksToVerify: [
+          "Rotor head PGC-SH-014 may catch mower equipment near the collar.",
+        ],
+      },
+      {
+        issues,
+        workOrders,
+        assetIds: ["PGC-SH-014"],
+      },
+    );
+
+    expect(result.topPriorities[0].rank).toBe(1);
+    expect(result.topPriorities[0].reason).toContain("Flag the head");
+    expect(result.weatherWatch.summary).toContain("Wind may affect");
+    expect(result.crewPlan[0].relatedAssetIds).toEqual(["PGC-SH-014"]);
+    expect(result.risksToVerify[0].assetId).toBe("PGC-SH-014");
+  });
+
+  it("fills sparse priority text from the matching source issue", () => {
+    const result = validateMorningBriefResponse(
+      {
+        ...validBrief,
+        topPriorities: [
+          {
+            issueId: "PGC-ISS-101",
+            assetId: "PGC-SH-014",
+            title: "Rotor head stuck high beside No. 2 green",
+          },
+        ],
+      },
+      {
+        issues,
+        workOrders,
+        assetIds: ["PGC-SH-014"],
+      },
+    );
+
+    expect(result.topPriorities[0].reason).toBe(issues[0].summary);
+    expect(result.topPriorities[0].recommendedAction).toBe(
+      issues[0].recommendedAction,
+    );
+  });
+
   it("records the local persistence trace step after a brief is accepted", () => {
     const trace = appendClientMorningBriefTrace({
       trace: createMorningBriefStartedTrace({
