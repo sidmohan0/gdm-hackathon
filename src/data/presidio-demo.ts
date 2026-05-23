@@ -42,6 +42,7 @@ export type DemoAsset = {
 export type DemoIssue = {
   id: string;
   assetId: string;
+  fieldId?: string;
   title: string;
   severity: IssueSeverity;
   status: IssueStatus;
@@ -50,6 +51,11 @@ export type DemoIssue = {
   priorityScore: number;
   summary: string;
   recommendedAction: string;
+  source?: "seed" | "generated";
+  observationId?: string;
+  workOrderId?: string;
+  confidence?: number;
+  evidence?: string[];
 };
 
 export type DemoFeature = {

@@ -6,8 +6,15 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import {
   DEMO_PHOTO_PATH,
   type DemoIssue,
+  getAssetById,
   seedIssues,
 } from "@/data/presidio-demo";
+import {
+  buildGeneratedArtifacts,
+  type ActivityLogEntry,
+  type GeneratedObservation,
+  type GeneratedWorkOrder,
+} from "@/lib/generated-work";
 import type { TriageResult } from "@/lib/triage";
 
 type AttachedPhoto = {
@@ -26,6 +33,10 @@ type DemoState = {
   analysisStatus: "idle" | "running" | "succeeded" | "failed";
   triageResult: TriageResult | null;
   analysisError: string | null;
+  generatedObservations: GeneratedObservation[];
+  generatedWorkOrders: GeneratedWorkOrder[];
+  activityLog: ActivityLogEntry[];
+  activeWorkOrderId: string | null;
   selectAsset: (assetId: string) => void;
   attachDemoPhoto: () => void;
   attachUploadedPhoto: (photo: {
@@ -50,6 +61,10 @@ export const useDemoStore = create<DemoState>()(
       analysisStatus: "idle",
       triageResult: null,
       analysisError: null,
+      generatedObservations: [],
+      generatedWorkOrders: [],
+      activityLog: [],
+      activeWorkOrderId: null,
       selectAsset: (assetId) =>
         set((state) => ({
           selectedAssetId: assetId,
@@ -110,10 +125,60 @@ export const useDemoStore = create<DemoState>()(
           analysisError: null,
         }),
       completeAnalysis: (result) =>
-        set({
-          analysisStatus: "succeeded",
-          triageResult: result,
-          analysisError: null,
+        set((state) => {
+          const asset = state.selectedAssetId
+            ? getAssetById(state.selectedAssetId)
+            : null;
+
+          if (!asset || state.attachedPhoto?.assetId !== asset.id) {
+            return {
+              analysisStatus: "succeeded",
+              triageResult: result,
+              analysisError: null,
+            };
+          }
+
+          const existingWorkOrder = state.generatedWorkOrders.find(
+            (workOrder) => workOrder.assetId === asset.id,
+          );
+          const logSequence =
+            state.activityLog.filter((entry) => entry.assetId === asset.id)
+              .length + 1;
+          const artifacts = buildGeneratedArtifacts({
+            asset,
+            triage: result,
+            clickedCoordinates: asset.coordinates,
+            photoName: state.attachedPhoto.name,
+            note: state.superintendentNote,
+            logSequence,
+            replacesExisting: Boolean(existingWorkOrder),
+          });
+
+          return {
+            analysisStatus: "succeeded",
+            triageResult: result,
+            analysisError: null,
+            issues: [
+              ...state.issues.filter(
+                (issue) => issue.id !== artifacts.issue.id,
+              ),
+              artifacts.issue,
+            ],
+            generatedObservations: [
+              ...state.generatedObservations.filter(
+                (observation) => observation.id !== artifacts.observation.id,
+              ),
+              artifacts.observation,
+            ],
+            generatedWorkOrders: [
+              ...state.generatedWorkOrders.filter(
+                (workOrder) => workOrder.id !== artifacts.workOrder.id,
+              ),
+              artifacts.workOrder,
+            ],
+            activityLog: [...state.activityLog, artifacts.activityLogEntry],
+            activeWorkOrderId: artifacts.workOrder.id,
+          };
         }),
       failAnalysis: (error) =>
         set({
@@ -129,6 +194,10 @@ export const useDemoStore = create<DemoState>()(
           analysisStatus: "idle",
           triageResult: null,
           analysisError: null,
+          generatedObservations: [],
+          generatedWorkOrders: [],
+          activityLog: [],
+          activeWorkOrderId: null,
         }),
     }),
     {
@@ -142,6 +211,10 @@ export const useDemoStore = create<DemoState>()(
         analysisStatus: state.analysisStatus,
         triageResult: state.triageResult,
         analysisError: state.analysisError,
+        generatedObservations: state.generatedObservations,
+        generatedWorkOrders: state.generatedWorkOrders,
+        activityLog: state.activityLog,
+        activeWorkOrderId: state.activeWorkOrderId,
       }),
     },
   ),

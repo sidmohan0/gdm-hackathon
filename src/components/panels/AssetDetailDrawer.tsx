@@ -5,6 +5,10 @@ import { Gauge, MapPin, Wrench } from "lucide-react";
 
 import type { DemoIssue } from "@/data/presidio-demo";
 import { buildAssetOperationsContext } from "@/lib/gis-context";
+import type {
+  ActivityLogEntry,
+  GeneratedWorkOrder,
+} from "@/lib/generated-work";
 import { assetColors, severityColors } from "@/lib/map-style";
 import type { TriageResult } from "@/lib/triage";
 
@@ -22,6 +26,8 @@ type AssetDetailDrawerProps = {
   analysisStatus: "idle" | "running" | "succeeded" | "failed";
   triageResult: TriageResult | null;
   analysisError: string | null;
+  activeWorkOrder: GeneratedWorkOrder | null;
+  activityLog: ActivityLogEntry[];
   onNoteChange: (note: string) => void;
 };
 
@@ -33,6 +39,8 @@ export function AssetDetailDrawer({
   analysisStatus,
   triageResult,
   analysisError,
+  activeWorkOrder,
+  activityLog,
   onNoteChange,
 }: AssetDetailDrawerProps) {
   const context = selectedAssetId
@@ -43,6 +51,11 @@ export function AssetDetailDrawer({
   const photoSrc = attachedToSelected && attachedPhoto
     ? attachedPhoto.dataUrl ?? attachedPhoto.path
     : null;
+  const workOrderForAsset =
+    activeWorkOrder?.assetId === asset?.id ? activeWorkOrder : null;
+  const workOrderActivity = workOrderForAsset
+    ? activityLog.filter((entry) => entry.workOrderId === workOrderForAsset.id)
+    : [];
 
   if (!asset || !context) {
     return (
@@ -224,6 +237,60 @@ export function AssetDetailDrawer({
           </article>
         ) : null}
       </div>
+
+      {workOrderForAsset ? (
+        <div className="mt-5 border border-cyan-500/60 bg-slate-900 p-3 text-sm">
+          <div className="mb-2 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">
+                Generated work order
+              </p>
+              <h3 className="mt-1 font-semibold text-slate-100">
+                {workOrderForAsset.title}
+              </h3>
+            </div>
+            <span className="border border-slate-700 px-2 py-1 text-xs uppercase tracking-[0.12em] text-slate-300">
+              {workOrderForAsset.status}
+            </span>
+          </div>
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-slate-400">
+            <dt>Priority</dt>
+            <dd className="text-slate-200">{workOrderForAsset.priority}</dd>
+            <dt>Linked issue</dt>
+            <dd className="text-slate-200">{workOrderForAsset.issueId}</dd>
+            <dt>Confidence</dt>
+            <dd className="text-slate-200">
+              {Math.round(workOrderForAsset.confidence * 100)}%
+            </dd>
+            <dt>Asset</dt>
+            <dd className="text-slate-200">{workOrderForAsset.fieldId}</dd>
+          </dl>
+          <div className="mt-3 space-y-2 text-slate-300">
+            <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
+              Actions
+            </p>
+            <ul className="list-inside list-disc space-y-1">
+              {workOrderForAsset.recommendedActions.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            {workOrderForAsset.possibleParts.length > 0 ? (
+              <p className="text-xs text-slate-400">
+                Parts: {workOrderForAsset.possibleParts.join(", ")}
+              </p>
+            ) : null}
+          </div>
+          {workOrderActivity.length > 0 ? (
+            <div className="mt-3 border-t border-slate-800 pt-3 text-xs text-slate-400">
+              {workOrderActivity.slice(-3).map((entry) => (
+                <p key={entry.id}>
+                  {entry.event}: {entry.message}
+                </p>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="mt-5">
         <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">

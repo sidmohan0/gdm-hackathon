@@ -35,6 +35,11 @@ export function DemoDashboard() {
   const analysisStatus = useDemoStore((state) => state.analysisStatus);
   const triageResult = useDemoStore((state) => state.triageResult);
   const analysisError = useDemoStore((state) => state.analysisError);
+  const generatedWorkOrders = useDemoStore(
+    (state) => state.generatedWorkOrders,
+  );
+  const activityLog = useDemoStore((state) => state.activityLog);
+  const activeWorkOrderId = useDemoStore((state) => state.activeWorkOrderId);
   const selectAsset = useDemoStore((state) => state.selectAsset);
   const attachDemoPhoto = useDemoStore((state) => state.attachDemoPhoto);
   const attachUploadedPhoto = useDemoStore((state) => state.attachUploadedPhoto);
@@ -49,6 +54,13 @@ export function DemoDashboard() {
   const activeIssueCount = useMemo(
     () => issues.filter((issue) => issue.status !== "resolved").length,
     [issues],
+  );
+  const activeWorkOrder = useMemo(
+    () =>
+      generatedWorkOrders.find(
+        (workOrder) => workOrder.id === activeWorkOrderId,
+      ) ?? null,
+    [activeWorkOrderId, generatedWorkOrders],
   );
   const handleMapHealthChange = useCallback((health: MapboxClientHealth) => {
     setMapboxHealth(health);
@@ -188,6 +200,8 @@ export function DemoDashboard() {
           analysisStatus={analysisStatus}
           triageResult={triageResult}
           analysisError={analysisError}
+          activeWorkOrder={activeWorkOrder}
+          activityLog={activityLog}
           onNoteChange={setSuperintendentNote}
         />
       </main>
