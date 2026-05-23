@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { FunctionCallingConfigMode, GoogleGenAI, Type } from "@google/genai";
 import { ZodError } from "zod";
 
 import {
@@ -116,6 +116,11 @@ const submitTriageFunction = {
       "confidence",
     ],
   },
+};
+
+export const triageFunctionCallingConfig = {
+  mode: FunctionCallingConfigMode.ANY,
+  allowedFunctionNames: [submitTriageFunction.name],
 };
 
 function sanitizeError(error: unknown) {
@@ -329,6 +334,9 @@ export async function analyzePhotoWithGemini(
           temperature: 0.2,
           maxOutputTokens: 2048,
           tools: [{ functionDeclarations: [submitTriageFunction] }],
+          toolConfig: {
+            functionCallingConfig: triageFunctionCallingConfig,
+          },
         },
       });
     } catch (error) {

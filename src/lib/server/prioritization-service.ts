@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { FunctionCallingConfigMode, GoogleGenAI, Type } from "@google/genai";
 import { ZodError, z } from "zod";
 
 import {
@@ -250,6 +250,11 @@ const submitDailyPlanFunction = {
   },
 };
 
+export const prioritizationFunctionCallingConfig = {
+  mode: FunctionCallingConfigMode.ANY,
+  allowedFunctionNames: [submitDailyPlanFunction.name],
+};
+
 function responseSource(response: {
   functionCalls?: Array<{
     name?: string;
@@ -420,6 +425,9 @@ export async function prioritizeDailyWork(
         temperature: 0.2,
         maxOutputTokens: 2048,
         tools: [{ functionDeclarations: [submitDailyPlanFunction] }],
+        toolConfig: {
+          functionCallingConfig: prioritizationFunctionCallingConfig,
+        },
       },
     });
   } catch (error) {

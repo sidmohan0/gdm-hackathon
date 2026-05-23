@@ -473,32 +473,40 @@ export const useDemoStore = create<DemoState>()(
     {
       name: "gdm-demo-state-v1",
       storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({
-        selectedAssetId: state.selectedAssetId,
-        issues: state.issues,
-        attachedPhoto: state.attachedPhoto,
-        superintendentNote: state.superintendentNote,
-        analysisStatus: state.analysisStatus,
-        triageResult: state.triageResult,
-        analysisError: state.analysisError,
-        analysisTrace: state.analysisTrace,
-        analysisModelDetails: state.analysisModelDetails,
-        prioritizationStatus: state.prioritizationStatus,
-        prioritizationError: state.prioritizationError,
-        dailyPlan: state.dailyPlan,
-        prioritizationTrace: state.prioritizationTrace,
-        prioritizationModelDetails: state.prioritizationModelDetails,
-        morningBriefStatus: state.morningBriefStatus,
-        morningBriefError: state.morningBriefError,
-        morningBrief: state.morningBrief,
-        morningBriefTrace: state.morningBriefTrace,
-        morningBriefModelDetails: state.morningBriefModelDetails,
-        highlightedIssueId: state.highlightedIssueId,
-        generatedObservations: state.generatedObservations,
-        generatedWorkOrders: state.generatedWorkOrders,
-        activityLog: state.activityLog,
-        activeWorkOrderId: state.activeWorkOrderId,
-      }),
+      partialize: (state) => {
+        const attachedPhoto = state.attachedPhoto?.path
+          ? state.attachedPhoto
+          : null;
+
+        return {
+          selectedAssetId: state.selectedAssetId,
+          issues: state.issues,
+          attachedPhoto,
+          superintendentNote: state.superintendentNote,
+          analysisStatus: attachedPhoto ? state.analysisStatus : "idle",
+          triageResult: attachedPhoto ? state.triageResult : null,
+          analysisError: attachedPhoto ? state.analysisError : null,
+          analysisTrace: attachedPhoto ? state.analysisTrace : [],
+          analysisModelDetails: attachedPhoto
+            ? state.analysisModelDetails
+            : null,
+          prioritizationStatus: state.prioritizationStatus,
+          prioritizationError: state.prioritizationError,
+          dailyPlan: state.dailyPlan,
+          prioritizationTrace: state.prioritizationTrace,
+          prioritizationModelDetails: state.prioritizationModelDetails,
+          morningBriefStatus: state.morningBriefStatus,
+          morningBriefError: state.morningBriefError,
+          morningBrief: state.morningBrief,
+          morningBriefTrace: state.morningBriefTrace,
+          morningBriefModelDetails: state.morningBriefModelDetails,
+          highlightedIssueId: state.highlightedIssueId,
+          generatedObservations: state.generatedObservations,
+          generatedWorkOrders: state.generatedWorkOrders,
+          activityLog: state.activityLog,
+          activeWorkOrderId: state.activeWorkOrderId,
+        };
+      },
     },
   ),
 );
