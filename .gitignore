@@ -39,6 +39,7 @@ venv/
 
 # Local scratch files
 .scratch/
+.playwright-cli/
 
 # Vercel and TypeScript generated files
 .vercel/

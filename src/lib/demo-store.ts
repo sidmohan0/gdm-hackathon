@@ -32,6 +32,15 @@ import {
   type PrioritizationModelDetails,
   type PrioritizationTraceStep,
 } from "@/lib/daily-plan";
+import {
+  appendClientMorningBriefTrace,
+  createMorningBriefStartedTrace,
+  markMorningBriefTraceFailed,
+  setMorningBriefTraceStepStatus,
+  type MorningBrief,
+  type MorningBriefModelDetails,
+  type MorningBriefTraceStep,
+} from "@/lib/morning-brief";
 
 type AttachedPhoto = {
   assetId: string;
@@ -56,6 +65,11 @@ type DemoState = {
   dailyPlan: DailyPlan | null;
   prioritizationTrace: PrioritizationTraceStep[];
   prioritizationModelDetails: PrioritizationModelDetails | null;
+  morningBriefStatus: "idle" | "running" | "succeeded" | "failed";
+  morningBriefError: string | null;
+  morningBrief: MorningBrief | null;
+  morningBriefTrace: MorningBriefTraceStep[];
+  morningBriefModelDetails: MorningBriefModelDetails | null;
   highlightedIssueId: string | null;
   generatedObservations: GeneratedObservation[];
   generatedWorkOrders: GeneratedWorkOrder[];
@@ -91,6 +105,17 @@ type DemoState = {
     trace?: PrioritizationTraceStep[],
     modelDetails?: PrioritizationModelDetails | null,
   ) => void;
+  startMorningBrief: () => void;
+  completeMorningBrief: (
+    brief: MorningBrief,
+    trace?: MorningBriefTraceStep[],
+    modelDetails?: MorningBriefModelDetails | null,
+  ) => void;
+  failMorningBrief: (
+    error: string,
+    trace?: MorningBriefTraceStep[],
+    modelDetails?: MorningBriefModelDetails | null,
+  ) => void;
   resetDemo: () => void;
 };
 
@@ -111,6 +136,11 @@ export const useDemoStore = create<DemoState>()(
       dailyPlan: null,
       prioritizationTrace: [],
       prioritizationModelDetails: null,
+      morningBriefStatus: "idle",
+      morningBriefError: null,
+      morningBrief: null,
+      morningBriefTrace: [],
+      morningBriefModelDetails: null,
       highlightedIssueId: null,
       generatedObservations: [],
       generatedWorkOrders: [],
@@ -348,6 +378,70 @@ export const useDemoStore = create<DemoState>()(
           prioritizationModelDetails:
             modelDetails ?? state.prioritizationModelDetails,
         })),
+      startMorningBrief: () => {
+        const state = get();
+        const openWorkCount = state.issues.filter(
+          (issue) => issue.status !== "resolved",
+        ).length;
+
+        set({
+          morningBriefStatus: "running",
+          morningBriefError: null,
+          morningBriefTrace: createMorningBriefStartedTrace({
+            openWorkCount,
+            workOrderCount: state.generatedWorkOrders.length,
+            activityLogCount: state.activityLog.length,
+          }),
+          morningBriefModelDetails: null,
+        });
+      },
+      completeMorningBrief: (brief, trace, modelDetails) =>
+        set((state) => ({
+          morningBriefStatus: "succeeded",
+          morningBriefError: null,
+          morningBrief: brief,
+          morningBriefTrace: appendClientMorningBriefTrace({
+            trace: trace ?? state.morningBriefTrace,
+          }),
+          morningBriefModelDetails:
+            modelDetails ?? state.morningBriefModelDetails,
+        })),
+      failMorningBrief: (error, trace, modelDetails) =>
+        set((state) => {
+          const openWorkCount = state.issues.filter(
+            (issue) => issue.status !== "resolved",
+          ).length;
+          const baseTrace =
+            state.morningBriefTrace.length > 0
+              ? state.morningBriefTrace
+              : createMorningBriefStartedTrace({
+                  openWorkCount,
+                  workOrderCount: state.generatedWorkOrders.length,
+                  activityLogCount: state.activityLog.length,
+                });
+          const settledTrace = setMorningBriefTraceStepStatus(
+            baseTrace,
+            "open_work_loaded",
+            "complete",
+            {
+              detail: `${openWorkCount} open issues were prepared before the request failed.`,
+            },
+          );
+
+          return {
+            morningBriefStatus: "failed",
+            morningBriefError: error,
+            morningBriefTrace:
+              trace ??
+              markMorningBriefTraceFailed(
+                settledTrace,
+                "managed_agent_requested",
+                error,
+              ),
+            morningBriefModelDetails:
+              modelDetails ?? state.morningBriefModelDetails,
+          };
+        }),
       resetDemo: () =>
         set({
           selectedAssetId: null,
@@ -364,6 +458,11 @@ export const useDemoStore = create<DemoState>()(
           dailyPlan: null,
           prioritizationTrace: [],
           prioritizationModelDetails: null,
+          morningBriefStatus: "idle",
+          morningBriefError: null,
+          morningBrief: null,
+          morningBriefTrace: [],
+          morningBriefModelDetails: null,
           highlightedIssueId: null,
           generatedObservations: [],
           generatedWorkOrders: [],
@@ -389,6 +488,11 @@ export const useDemoStore = create<DemoState>()(
         dailyPlan: state.dailyPlan,
         prioritizationTrace: state.prioritizationTrace,
         prioritizationModelDetails: state.prioritizationModelDetails,
+        morningBriefStatus: state.morningBriefStatus,
+        morningBriefError: state.morningBriefError,
+        morningBrief: state.morningBrief,
+        morningBriefTrace: state.morningBriefTrace,
+        morningBriefModelDetails: state.morningBriefModelDetails,
         highlightedIssueId: state.highlightedIssueId,
         generatedObservations: state.generatedObservations,
         generatedWorkOrders: state.generatedWorkOrders,

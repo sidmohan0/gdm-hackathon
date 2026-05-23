@@ -8,6 +8,7 @@ import { AssetListPanel } from "@/components/panels/AssetListPanel";
 import { DailyPlanPanel } from "@/components/panels/DailyPlanPanel";
 import { IssueWorkListPanel } from "@/components/panels/IssueWorkListPanel";
 import { LayerPanel } from "@/components/panels/LayerPanel";
+import { MorningBriefPanel } from "@/components/panels/MorningBriefPanel";
 import { ReadinessDot } from "@/components/shell/ReadinessDot";
 import { WeatherChip } from "@/components/shell/WeatherChip";
 import {
@@ -35,6 +36,11 @@ import {
   type PrioritizationModelDetails,
   type PrioritizationTraceStep,
 } from "@/lib/daily-plan";
+import type {
+  MorningBrief,
+  MorningBriefModelDetails,
+  MorningBriefTraceStep,
+} from "@/lib/morning-brief";
 
 type AnalyzePhotoPayload = {
   result?: TriageResult;
@@ -47,6 +53,13 @@ type PrioritizePayload = {
   dailyPlan?: DailyPlan;
   trace?: PrioritizationTraceStep[];
   modelDetails?: PrioritizationModelDetails | null;
+  error?: string;
+};
+
+type MorningBriefPayload = {
+  brief?: MorningBrief;
+  trace?: MorningBriefTraceStep[];
+  modelDetails?: MorningBriefModelDetails | null;
   error?: string;
 };
 
@@ -79,6 +92,15 @@ export function DemoDashboard() {
   const prioritizationModelDetails = useDemoStore(
     (state) => state.prioritizationModelDetails,
   );
+  const morningBriefStatus = useDemoStore(
+    (state) => state.morningBriefStatus,
+  );
+  const morningBriefError = useDemoStore((state) => state.morningBriefError);
+  const morningBrief = useDemoStore((state) => state.morningBrief);
+  const morningBriefTrace = useDemoStore((state) => state.morningBriefTrace);
+  const morningBriefModelDetails = useDemoStore(
+    (state) => state.morningBriefModelDetails,
+  );
   const highlightedIssueId = useDemoStore((state) => state.highlightedIssueId);
   const generatedWorkOrders = useDemoStore(
     (state) => state.generatedWorkOrders,
@@ -103,6 +125,11 @@ export function DemoDashboard() {
   const failPrioritization = useDemoStore(
     (state) => state.failPrioritization,
   );
+  const startMorningBrief = useDemoStore((state) => state.startMorningBrief);
+  const completeMorningBrief = useDemoStore(
+    (state) => state.completeMorningBrief,
+  );
+  const failMorningBrief = useDemoStore((state) => state.failMorningBrief);
   const resetDemo = useDemoStore((state) => state.resetDemo);
 
   const activeIssueCount = useMemo(
@@ -127,14 +154,27 @@ export function DemoDashboard() {
     Boolean(selectedAssetId) && attachedPhoto?.assetId === selectedAssetId;
   const isAnalyzing = analysisStatus === "running";
   const isPrioritizing = prioritizationStatus === "running";
+  const isGeneratingBrief = morningBriefStatus === "running";
   const canUploadPhoto = Boolean(
-    selectedAssetId && !isAnalyzing && !isPrioritizing,
+    selectedAssetId && !isAnalyzing && !isPrioritizing && !isGeneratingBrief,
   );
   const canAnalyze = Boolean(
-    selectedAssetId && hasSelectedPhoto && !isAnalyzing && !isPrioritizing,
+    selectedAssetId &&
+      hasSelectedPhoto &&
+      !isAnalyzing &&
+      !isPrioritizing &&
+      !isGeneratingBrief,
   );
   const canPrioritize =
-    activeIssueCount > 0 && !isAnalyzing && !isPrioritizing;
+    activeIssueCount > 0 &&
+    !isAnalyzing &&
+    !isPrioritizing &&
+    !isGeneratingBrief;
+  const canGenerateBrief =
+    activeIssueCount > 0 &&
+    !isAnalyzing &&
+    !isPrioritizing &&
+    !isGeneratingBrief;
 
   const handlePhotoFileSelected = useCallback(
     async (file: File) => {
@@ -160,6 +200,7 @@ export function DemoDashboard() {
     if (
       isAnalyzing ||
       isPrioritizing ||
+      isGeneratingBrief ||
       !selectedAsset ||
       !attachedPhoto ||
       attachedPhoto.assetId !== selectedAssetId
@@ -220,6 +261,7 @@ export function DemoDashboard() {
     attachedPhoto,
     completeAnalysis,
     failAnalysis,
+    isGeneratingBrief,
     isAnalyzing,
     isPrioritizing,
     selectedAssetId,
@@ -306,6 +348,70 @@ export function DemoDashboard() {
     startPrioritization,
   ]);
 
+  const handleMorningBrief = useCallback(async () => {
+    if (!canGenerateBrief) {
+      return;
+    }
+
+    startMorningBrief();
+
+    try {
+      const response = await fetch("/api/morning-brief", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          issues,
+          workOrders: generatedWorkOrders,
+          activityLog,
+          dailyPlan,
+        }),
+      });
+      const payload = (await response.json()) as MorningBriefPayload;
+
+      if (!response.ok) {
+        failMorningBrief(
+          payload.error ?? "Gemini managed-agent brief failed.",
+          payload.trace,
+          payload.modelDetails,
+        );
+        return;
+      }
+
+      if (!payload.brief) {
+        failMorningBrief(
+          "Gemini managed agent did not return a Morning Superintendent Brief.",
+          payload.trace,
+          payload.modelDetails,
+        );
+        return;
+      }
+
+      completeMorningBrief(
+        payload.brief,
+        payload.trace,
+        payload.modelDetails,
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? `Managed-agent request failed: ${error.message}.`
+          : "Gemini managed-agent brief failed.";
+
+      failMorningBrief(message);
+    }
+  }, [
+    activityLog,
+    canGenerateBrief,
+    completeMorningBrief,
+    dailyPlan,
+    failMorningBrief,
+    generatedWorkOrders,
+    issues,
+    startMorningBrief,
+  ]);
+
   return (
     <div className="min-h-screen bg-neutral-950 text-slate-100">
       <header className="border-b border-slate-800 bg-neutral-950 px-5 py-4">
@@ -354,6 +460,17 @@ export function DemoDashboard() {
             dailyPlan={dailyPlan}
             trace={prioritizationTrace}
             modelDetails={prioritizationModelDetails}
+            onIssueSelect={handleIssueSelect}
+          />
+          <MorningBriefPanel
+            status={morningBriefStatus}
+            error={morningBriefError}
+            brief={morningBrief}
+            trace={morningBriefTrace}
+            modelDetails={morningBriefModelDetails}
+            canGenerate={canGenerateBrief}
+            openWorkCount={activeIssueCount}
+            onGenerate={handleMorningBrief}
             onIssueSelect={handleIssueSelect}
           />
           <IssueWorkListPanel
