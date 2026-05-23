@@ -23,6 +23,7 @@ import type { MapboxClientHealth } from "@/lib/readiness";
 type CourseMapProps = {
   selectedAssetId: string | null;
   issues: DemoIssue[];
+  highlightedIssueId: string | null;
   layers: LayerVisibility;
   onAssetSelect: (assetId: string) => void;
   onMapHealthChange: (health: MapboxClientHealth) => void;
@@ -55,6 +56,7 @@ function severityColorExpression(): ExpressionSpecification {
 export function CourseMap({
   selectedAssetId,
   issues,
+  highlightedIssueId,
   layers,
   onAssetSelect,
   onMapHealthChange,
@@ -64,6 +66,7 @@ export function CourseMap({
   const onAssetSelectRef = useRef(onAssetSelect);
   const onMapHealthChangeRef = useRef(onMapHealthChange);
   const selectedAssetIdRef = useRef(selectedAssetId);
+  const highlightedIssueIdRef = useRef(highlightedIssueId);
   const [styleReady, setStyleReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
 
@@ -78,6 +81,10 @@ export function CourseMap({
     ? null
     : "Mapbox token missing. Add NEXT_PUBLIC_MAPBOX_TOKEN to .env and restart the dev server.";
   const visibleMapError = tokenError ?? mapError;
+  const highlightedIssue = useMemo(
+    () => issues.find((issue) => issue.id === highlightedIssueId) ?? null,
+    [highlightedIssueId, issues],
+  );
 
   useEffect(() => {
     onAssetSelectRef.current = onAssetSelect;
@@ -94,6 +101,10 @@ export function CourseMap({
   useEffect(() => {
     selectedAssetIdRef.current = selectedAssetId;
   }, [selectedAssetId]);
+
+  useEffect(() => {
+    highlightedIssueIdRef.current = highlightedIssueId;
+  }, [highlightedIssueId]);
 
   useEffect(() => {
     if (tokenError) {
@@ -265,6 +276,26 @@ export function CourseMap({
         },
       });
 
+      map.addLayer({
+        id: layerIds.prioritizedIssueGlow,
+        type: "circle",
+        source: "gdm-issues",
+        filter: [
+          "==",
+          ["get", "issueId"],
+          highlightedIssueIdRef.current ?? "__none__",
+        ],
+        paint: {
+          "circle-color": "#fef08a",
+          "circle-radius": 30,
+          "circle-opacity": 0.42,
+          "circle-blur": 0.2,
+          "circle-stroke-color": "#fde047",
+          "circle-stroke-width": 4,
+          "circle-stroke-opacity": 0.95,
+        },
+      });
+
       map.on("click", (event) => {
         const visibleClickableLayers = clickableLayerIds.filter((layerId) =>
           map.getLayer(layerId),
@@ -358,6 +389,42 @@ export function CourseMap({
   useEffect(() => {
     const map = mapRef.current;
 
+    if (!map || !styleReady || !map.getLayer(layerIds.prioritizedIssueGlow)) {
+      return;
+    }
+
+    map.setFilter(layerIds.prioritizedIssueGlow, [
+      "==",
+      ["get", "issueId"],
+      highlightedIssueId ?? "__none__",
+    ]);
+  }, [highlightedIssueId, styleReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+
+    if (!map || !styleReady || !highlightedIssueId) {
+      return;
+    }
+
+    const highlightedIssue = issues.find(
+      (issue) => issue.id === highlightedIssueId,
+    );
+
+    if (!highlightedIssue) {
+      return;
+    }
+
+    map.easeTo({
+      center: highlightedIssue.coordinates,
+      zoom: Math.max(map.getZoom(), 16.7),
+      duration: 700,
+    });
+  }, [highlightedIssueId, issues, styleReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+
     if (!map || !styleReady) {
       return;
     }
@@ -368,6 +435,7 @@ export function CourseMap({
       [layerIds.assetValves, layers.valves],
       [layerIds.assetControllers, layers.controllers],
       [layerIds.issueMarkers, layers.issues],
+      [layerIds.prioritizedIssueGlow, layers.issues],
     ]);
 
     visibilityByLayer.forEach((isVisible, layerId) => {
@@ -402,6 +470,18 @@ export function CourseMap({
             Map unavailable
           </div>
           <p>{visibleMapError}</p>
+        </div>
+      ) : null}
+      {highlightedIssue ? (
+        <div className="pointer-events-none absolute left-4 top-24 max-w-[320px] border border-amber-300 bg-slate-950/90 p-3 text-sm text-slate-100 shadow-xl backdrop-blur">
+          <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-amber-200">
+            <span className="h-2.5 w-2.5 rounded-full bg-amber-300 shadow-[0_0_18px_rgba(253,224,71,0.9)]" />
+            Top priority
+          </div>
+          <p className="font-semibold">{highlightedIssue.title}</p>
+          <p className="mt-1 text-xs text-slate-400">
+            {highlightedIssue.id} / {highlightedIssue.severity}
+          </p>
         </div>
       ) : null}
     </section>

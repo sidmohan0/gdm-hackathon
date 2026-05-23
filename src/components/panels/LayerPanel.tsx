@@ -16,10 +16,13 @@ type LayerPanelProps = {
   selectedAssetId: string | null;
   canAnalyze: boolean;
   isAnalyzing: boolean;
+  canPrioritize: boolean;
+  isPrioritizing: boolean;
   onLayerChange: (nextLayers: LayerVisibility) => void;
   onUploadPhoto: () => void;
   onPhotoFileSelected: (file: File) => void;
   onAnalyze: () => void;
+  onPrioritize: () => void;
   onReset: () => void;
 };
 
@@ -60,10 +63,13 @@ export function LayerPanel({
   selectedAssetId,
   canAnalyze,
   isAnalyzing,
+  canPrioritize,
+  isPrioritizing,
   onLayerChange,
   onUploadPhoto,
   onPhotoFileSelected,
   onAnalyze,
+  onPrioritize,
   onReset,
 }: LayerPanelProps) {
   return (
@@ -160,11 +166,16 @@ export function LayerPanel({
         </button>
         <button
           type="button"
-          disabled
-          className="inline-flex h-11 items-center justify-center gap-2 border border-slate-700 bg-slate-900 px-3 text-sm font-semibold text-slate-600"
+          onClick={onPrioritize}
+          disabled={!canPrioritize || isPrioritizing}
+          className="inline-flex h-11 items-center justify-center gap-2 border border-slate-700 bg-slate-900 px-3 text-sm font-semibold text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:text-slate-600"
         >
-          <CloudSun className="h-4 w-4" aria-hidden />
-          Prioritize
+          {isPrioritizing ? (
+            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <CloudSun className="h-4 w-4" aria-hidden />
+          )}
+          {isPrioritizing ? "Prioritizing" : "Prioritize"}
         </button>
       </div>
     </section>

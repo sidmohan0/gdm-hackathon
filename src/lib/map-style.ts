@@ -31,6 +31,7 @@ export const layerIds = {
   assetControllers: "gdm-asset-controllers",
   selectedPoints: "gdm-selected-points",
   issueMarkers: "gdm-issue-markers",
+  prioritizedIssueGlow: "gdm-prioritized-issue-glow",
 };
 
 export type LayerVisibility = {

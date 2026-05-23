@@ -24,6 +24,14 @@ import {
   type GeneratedWorkOrder,
 } from "@/lib/generated-work";
 import type { TriageResult } from "@/lib/triage";
+import {
+  appendClientPrioritizationTrace,
+  createPrioritizationStartedTrace,
+  markPrioritizationTraceFailed,
+  type DailyPlan,
+  type PrioritizationModelDetails,
+  type PrioritizationTraceStep,
+} from "@/lib/daily-plan";
 
 type AttachedPhoto = {
   assetId: string;
@@ -43,6 +51,12 @@ type DemoState = {
   analysisError: string | null;
   analysisTrace: AgentTraceStep[];
   analysisModelDetails: AnalysisModelDetails | null;
+  prioritizationStatus: "idle" | "running" | "succeeded" | "failed";
+  prioritizationError: string | null;
+  dailyPlan: DailyPlan | null;
+  prioritizationTrace: PrioritizationTraceStep[];
+  prioritizationModelDetails: PrioritizationModelDetails | null;
+  highlightedIssueId: string | null;
   generatedObservations: GeneratedObservation[];
   generatedWorkOrders: GeneratedWorkOrder[];
   activityLog: ActivityLogEntry[];
@@ -66,6 +80,17 @@ type DemoState = {
     trace?: AgentTraceStep[],
     modelDetails?: AnalysisModelDetails | null,
   ) => void;
+  startPrioritization: () => void;
+  completePrioritization: (
+    dailyPlan: DailyPlan,
+    trace?: PrioritizationTraceStep[],
+    modelDetails?: PrioritizationModelDetails | null,
+  ) => void;
+  failPrioritization: (
+    error: string,
+    trace?: PrioritizationTraceStep[],
+    modelDetails?: PrioritizationModelDetails | null,
+  ) => void;
   resetDemo: () => void;
 };
 
@@ -81,6 +106,12 @@ export const useDemoStore = create<DemoState>()(
       analysisError: null,
       analysisTrace: [],
       analysisModelDetails: null,
+      prioritizationStatus: "idle",
+      prioritizationError: null,
+      dailyPlan: null,
+      prioritizationTrace: [],
+      prioritizationModelDetails: null,
+      highlightedIssueId: null,
       generatedObservations: [],
       generatedWorkOrders: [],
       activityLog: [],
@@ -260,6 +291,63 @@ export const useDemoStore = create<DemoState>()(
           triageResult: null,
           activeWorkOrderId: null,
         })),
+      startPrioritization: () => {
+        const state = get();
+        const openWorkCount = state.issues.filter(
+          (issue) => issue.status !== "resolved",
+        ).length;
+
+        set({
+          prioritizationStatus: "running",
+          prioritizationError: null,
+          prioritizationTrace: createPrioritizationStartedTrace({
+            openWorkCount,
+            workOrderCount: state.generatedWorkOrders.length,
+          }),
+          prioritizationModelDetails: null,
+        });
+      },
+      completePrioritization: (dailyPlan, trace, modelDetails) =>
+        set((state) => {
+          const topIssueId = dailyPlan.items[0]?.issueId ?? null;
+
+          return {
+            prioritizationStatus: "succeeded",
+            prioritizationError: null,
+            dailyPlan,
+            prioritizationTrace: topIssueId
+              ? appendClientPrioritizationTrace({
+                  trace: trace ?? state.prioritizationTrace,
+                  topIssueId,
+                  rankedCount: dailyPlan.items.length,
+                })
+              : (trace ?? state.prioritizationTrace),
+            prioritizationModelDetails:
+              modelDetails ?? state.prioritizationModelDetails,
+            highlightedIssueId: topIssueId,
+          };
+        }),
+      failPrioritization: (error, trace, modelDetails) =>
+        set((state) => ({
+          prioritizationStatus: "failed",
+          prioritizationError: error,
+          prioritizationTrace:
+            trace ??
+            markPrioritizationTraceFailed(
+              state.prioritizationTrace.length > 0
+                ? state.prioritizationTrace
+                : createPrioritizationStartedTrace({
+                    openWorkCount: state.issues.filter(
+                      (issue) => issue.status !== "resolved",
+                    ).length,
+                    workOrderCount: state.generatedWorkOrders.length,
+                  }),
+              "gemini_prioritization_requested",
+              error,
+            ),
+          prioritizationModelDetails:
+            modelDetails ?? state.prioritizationModelDetails,
+        })),
       resetDemo: () =>
         set({
           selectedAssetId: null,
@@ -271,6 +359,12 @@ export const useDemoStore = create<DemoState>()(
           analysisError: null,
           analysisTrace: [],
           analysisModelDetails: null,
+          prioritizationStatus: "idle",
+          prioritizationError: null,
+          dailyPlan: null,
+          prioritizationTrace: [],
+          prioritizationModelDetails: null,
+          highlightedIssueId: null,
           generatedObservations: [],
           generatedWorkOrders: [],
           activityLog: [],
@@ -290,6 +384,12 @@ export const useDemoStore = create<DemoState>()(
         analysisError: state.analysisError,
         analysisTrace: state.analysisTrace,
         analysisModelDetails: state.analysisModelDetails,
+        prioritizationStatus: state.prioritizationStatus,
+        prioritizationError: state.prioritizationError,
+        dailyPlan: state.dailyPlan,
+        prioritizationTrace: state.prioritizationTrace,
+        prioritizationModelDetails: state.prioritizationModelDetails,
+        highlightedIssueId: state.highlightedIssueId,
         generatedObservations: state.generatedObservations,
         generatedWorkOrders: state.generatedWorkOrders,
         activityLog: state.activityLog,
