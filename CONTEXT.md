@@ -4,6 +4,8 @@
 
 GDM is a golf course GIS operations demo for superintendent and irrigation teams. The hackathon path shows a private course map, lets an operator select a real asset, attaches a field photo, runs live Gemini analysis, and turns the result into prioritized work.
 
+GDM should evolve toward a real map-first operations workspace, not a throwaway hackathon page. Demo polish should preserve product-grade navigation, information architecture, and interaction patterns that could support future business opportunities.
+
 ## Demo Spine
 
 1. Upload photo.
@@ -26,6 +28,10 @@ The demo course is Presidio Golf Course in San Francisco. The assets are plausib
 - Demo photo: The primary sample image at `public/demo-image.png`.
 - Reset: A local action that restores the original seeded state while preserving seeded assets and issues.
 - Morning Superintendent Brief: A read-only planning artifact generated from open issues, work orders, weather context, and activity history to help a superintendent understand the day.
+- Overlay pane: A single active information surface opened from the top demo shell over the map-first workspace.
+- Demo HUD: A compact always-visible status strip for readiness, weather, selected asset, open issue count, and workflow state.
+- Map-First Operations Workspace: The primary application shell where the course map remains central and operational modules open as contextual surfaces around it.
+- AI run: A single Gemini request/response workflow such as Analyze photo, Prioritize open work, or Generate Morning Superintendent Brief.
 
 ## Locked Decisions
 
@@ -61,3 +67,14 @@ The demo course is Presidio Golf Course in San Francisco. The assets are plausib
 - Morning Superintendent Brief recommendations must cite known issue, work order, or asset IDs from the supplied state; recommendations tied only to unknown records should be rejected or dropped.
 - The Morning Superintendent Brief UI should explicitly identify managed-agent generation with a compact trace, while staying framed as superintendent operations software.
 - Morning Superintendent Brief belongs with cross-asset planning artifacts, not inside the selected-asset detail drawer.
+- UI polish should use a map-first fixed demo shell with one active overlay pane at a time instead of stacked panels or long page scrolling.
+- The map-first shell should keep a compact default HUD visible even when no overlay pane is open.
+- Overlay panes should open in a consistent right-side surface with internal scrolling when content is long; the page itself should remain fixed.
+- The right-side inspector surface should use a fixed width with close/collapse behavior; user-resizable panels are out of scope for this slice.
+- Product-grade navigation should use a left module rail plus a top app bar rather than putting every module and command in a single horizontal toolbar.
+- The left module rail should use icons plus short labels so the workspace remains readable during live business demos.
+- Workflow actions such as Upload photo, Analyze, Prioritize, and Generate Morning Superintendent Brief should appear in a contextual command bar, not as navigation modules.
+- The map-first redesign should preserve all current capabilities while reorganizing them into product-grade modules.
+- The redesigned workspace should use a mostly white operational theme with subtle gray surfaces and British racing green `#004225` as the restrained accent for active navigation, selected map state, primary actions, and key status emphasis.
+- The redesigned workspace is desktop-first for a full-screen browser presentation; full mobile workflows are out of scope for this slice.
+- AI run history should stay latent in this slice; visible trace details remain embedded inside Analyze, Prioritize, and Morning Superintendent Brief surfaces.
