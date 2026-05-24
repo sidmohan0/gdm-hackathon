@@ -2,9 +2,7 @@
 
 import {
   AlertTriangle,
-  ClipboardList,
   FileText,
-  LoaderCircle,
   ShieldCheck,
 } from "lucide-react";
 
@@ -24,9 +22,7 @@ type MorningBriefPanelProps = {
   brief: MorningBrief | null;
   trace: MorningBriefTraceStep[];
   modelDetails: MorningBriefModelDetails | null;
-  canGenerate: boolean;
   openWorkCount: number;
-  onGenerate: () => void;
   onIssueSelect: (issueId: string) => void;
 };
 
@@ -80,9 +76,7 @@ export function MorningBriefPanel({
   brief,
   trace,
   modelDetails,
-  canGenerate,
   openWorkCount,
-  onGenerate,
   onIssueSelect,
 }: MorningBriefPanelProps) {
   const steps = trace.length > 0 ? trace : createEmptyMorningBriefTrace();
@@ -106,22 +100,7 @@ export function MorningBriefPanel({
         <FileText className="mt-1 h-4 w-4 shrink-0 text-emerald-300" aria-hidden />
       </div>
 
-      <button
-        type="button"
-        onClick={onGenerate}
-        disabled={!canGenerate || isRunning}
-        aria-busy={isRunning}
-        className="mb-3 inline-flex h-10 w-full items-center justify-center gap-2 border border-emerald-500 bg-emerald-500 px-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
-      >
-        {isRunning ? (
-          <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
-        ) : (
-          <ClipboardList className="h-4 w-4" aria-hidden />
-        )}
-        Generate brief
-      </button>
-
-      {!canGenerate && !isRunning ? (
+      {openWorkCount === 0 && !isRunning ? (
         <p className="mb-3 text-xs text-slate-500">
           No open work is available for the brief.
         </p>

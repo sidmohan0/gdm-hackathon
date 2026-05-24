@@ -73,7 +73,7 @@ export function AssetDetailDrawer({
           Asset detail
         </h2>
         <div className="mt-8 border border-dashed border-slate-700 p-6 text-sm text-slate-400">
-          Select a map asset or list row.
+          No asset selected.
         </div>
       </aside>
     );

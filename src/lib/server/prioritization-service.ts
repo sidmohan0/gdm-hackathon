@@ -212,6 +212,18 @@ function buildPrioritizationPrompt({
   ].join("\n");
 }
 
+function buildStrictJsonPrioritizationPrompt(input: {
+  candidates: PrioritizationCandidate[];
+  weather: WeatherSnapshot;
+}) {
+  return [
+    buildPrioritizationPrompt(input),
+    "",
+    "Return only one JSON object for the daily plan. Do not include markdown, prose, or code fences.",
+    "The JSON object must have this shape: {\"summary\":\"...\",\"items\":[{\"rank\":1,\"issueId\":\"...\",\"reason\":\"...\",\"recommendedCrew\":\"...\",\"estimatedDifficulty\":\"low|medium|high\",\"summary\":\"...\"}]}",
+  ].join("\n");
+}
+
 const submitDailyPlanFunction = {
   name: "submit_daily_plan",
   description:
@@ -261,7 +273,7 @@ function responseSource(response: {
     args?: unknown;
   }>;
   text?: string;
-}) {
+}): PrioritizationModelDetails["responseSource"] {
   const functionCall = response.functionCalls?.find(
     (call) => call.name === submitDailyPlanFunction.name,
   );
@@ -454,10 +466,10 @@ export async function prioritizeDailyWork(
     throw new PrioritizationError(message, 502, trace, modelDetails);
   }
 
-  const completedAtMs = Date.now();
-  const completedAt = new Date(completedAtMs).toISOString();
-  const requestLatencyMs = completedAtMs - requestedAtMs;
-  const source = responseSource(response);
+  let completedAtMs = Date.now();
+  let completedAt = new Date(completedAtMs).toISOString();
+  let requestLatencyMs = completedAtMs - requestedAtMs;
+  let source = responseSource(response);
 
   trace = setPrioritizationTraceStepStatus(
     trace,
@@ -486,6 +498,7 @@ export async function prioritizeDailyWork(
   };
 
   let validated;
+  let validationError: unknown = null;
 
   try {
     validated = validateDailyPlanResponse(
@@ -493,7 +506,68 @@ export async function prioritizeDailyWork(
       candidates.map((candidate) => candidate.issue.id),
     );
   } catch (error) {
-    const message = validationFailureMessage(error);
+    validationError = error;
+  }
+
+  if (!validated && source !== "function_call") {
+    try {
+      response = await ai.models.generateContent({
+        model: PRIORITIZATION_MODEL,
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: buildStrictJsonPrioritizationPrompt({
+                  candidates,
+                  weather,
+                }),
+              },
+            ],
+          },
+        ],
+        config: {
+          temperature: 0.1,
+          maxOutputTokens: 2048,
+          responseMimeType: "application/json",
+          responseSchema: submitDailyPlanFunction.parameters,
+        },
+      });
+
+      completedAtMs = Date.now();
+      completedAt = new Date(completedAtMs).toISOString();
+      requestLatencyMs = completedAtMs - requestedAtMs;
+      source = responseSource(response);
+
+      validated = validateDailyPlanResponse(
+        candidateFromResponse(response, source),
+        candidates.map((candidate) => candidate.issue.id),
+      );
+      validationError = null;
+      trace = setPrioritizationTraceStepStatus(
+        trace,
+        "gemini_prioritization_requested",
+        "complete",
+        {
+          at: completedAt,
+          latencyMs: requestLatencyMs,
+          detail:
+            "Gemini returned a strict JSON daily plan after a structured retry.",
+        },
+      );
+      modelDetails = {
+        ...modelDetails,
+        completedAt,
+        requestLatencyMs,
+        responseSource: source,
+      };
+    } catch (retryError) {
+      validationError = retryError;
+    }
+  }
+
+  if (!validated) {
+    const message = validationFailureMessage(validationError);
 
     trace = markPrioritizationTraceFailed(
       trace,

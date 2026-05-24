@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0a0a;
-  --foreground: #f8fafc;
+  --background: #f7f8f5;
+  --foreground: #0f172a;
 }
 
 @theme inline {
@@ -28,7 +28,7 @@ input:focus-visible,
 textarea:focus-visible,
 summary:focus-visible,
 [role="button"]:focus-visible {
-  outline: 2px solid #34d399;
+  outline: 2px solid #004225;
   outline-offset: 2px;
 }
 
@@ -40,4 +40,50 @@ input:disabled {
 .mapboxgl-ctrl-bottom-left,
 .mapboxgl-ctrl-bottom-right {
   z-index: 20;
+}
+
+.ops-shell [class*="bg-slate-950"],
+.ops-shell [class*="bg-slate-900"] {
+  background-color: #ffffff !important;
+}
+
+.ops-shell [class*="bg-slate-800"] {
+  background-color: #f1f5f9 !important;
+}
+
+.ops-shell [class*="border-slate-700"],
+.ops-shell [class*="border-slate-800"] {
+  border-color: #e2e8f0 !important;
+}
+
+.ops-shell [class*="text-slate-50"],
+.ops-shell [class*="text-slate-100"],
+.ops-shell [class*="text-slate-200"] {
+  color: #0f172a !important;
+}
+
+.ops-shell [class*="text-slate-300"] {
+  color: #334155 !important;
+}
+
+.ops-shell [class*="text-slate-400"],
+.ops-shell [class*="text-slate-500"] {
+  color: #64748b !important;
+}
+
+.ops-shell [class*="text-emerald-"],
+.ops-shell [class*="text-cyan-"] {
+  color: #004225 !important;
+}
+
+.ops-shell [class*="border-emerald-"] {
+  border-color: #004225 !important;
+}
+
+.ops-shell [class*="bg-emerald-500"] {
+  background-color: #004225 !important;
+}
+
+.ops-shell [class*="focus:border-emerald-"]:focus {
+  border-color: #004225 !important;
 }

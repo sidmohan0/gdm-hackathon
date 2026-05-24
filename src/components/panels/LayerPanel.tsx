@@ -1,30 +1,10 @@
 "use client";
 
-import {
-  Brain,
-  CloudSun,
-  ImageUp,
-  LoaderCircle,
-  RotateCcw,
-  Upload,
-} from "lucide-react";
-
 import type { LayerVisibility } from "@/lib/map-style";
 
 type LayerPanelProps = {
   layers: LayerVisibility;
-  selectedAssetId: string | null;
-  canUploadPhoto: boolean;
-  canAnalyze: boolean;
-  isAnalyzing: boolean;
-  canPrioritize: boolean;
-  isPrioritizing: boolean;
   onLayerChange: (nextLayers: LayerVisibility) => void;
-  onUploadPhoto: () => void;
-  onPhotoFileSelected: (file: File) => void;
-  onAnalyze: () => void;
-  onPrioritize: () => void;
-  onReset: () => void;
 };
 
 const layerLabels: Array<{
@@ -61,41 +41,21 @@ const layerLabels: Array<{
 
 export function LayerPanel({
   layers,
-  selectedAssetId,
-  canUploadPhoto,
-  canAnalyze,
-  isAnalyzing,
-  canPrioritize,
-  isPrioritizing,
   onLayerChange,
-  onUploadPhoto,
-  onPhotoFileSelected,
-  onAnalyze,
-  onPrioritize,
-  onReset,
 }: LayerPanelProps) {
   return (
-    <section className="border border-slate-700 bg-slate-950 p-4">
+    <section className="border border-slate-200 bg-white p-4">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
           Layers
         </h2>
-        <button
-          type="button"
-          onClick={onReset}
-          className="inline-flex h-9 w-9 items-center justify-center border border-slate-700 text-slate-200 transition hover:border-slate-500 hover:bg-slate-800"
-          title="Reset"
-          aria-label="Reset demo"
-        >
-          <RotateCcw className="h-4 w-4" aria-hidden />
-        </button>
       </div>
 
       <div className="space-y-2">
         {layerLabels.map((layer) => (
           <label
             key={layer.key}
-            className="flex min-h-10 items-center justify-between gap-3 border border-slate-800 bg-slate-900 px-3 text-sm text-slate-100"
+            className="flex min-h-10 items-center justify-between gap-3 border border-slate-200 bg-slate-50 px-3 text-sm text-slate-800"
           >
             <span className="flex items-center gap-2">
               <span
@@ -113,77 +73,10 @@ export function LayerPanel({
                   [layer.key]: event.currentTarget.checked,
                 })
               }
-              className="h-4 w-4 accent-emerald-400"
+              className="h-4 w-4 accent-[#004225]"
             />
           </label>
         ))}
-      </div>
-
-      <div className="mt-5 grid grid-cols-1 gap-2">
-        <div className="grid grid-cols-[1fr_auto] gap-2">
-          <button
-            type="button"
-            onClick={onUploadPhoto}
-            disabled={!canUploadPhoto}
-            aria-label="Upload photo"
-            className="inline-flex h-11 items-center justify-center gap-2 border border-emerald-500 bg-emerald-500 px-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
-          >
-            <Upload className="h-4 w-4" aria-hidden />
-            Upload photo
-          </button>
-          <label
-            className="inline-flex h-11 w-11 cursor-pointer items-center justify-center border border-slate-700 bg-slate-900 text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 has-[:disabled]:cursor-not-allowed has-[:disabled]:text-slate-600"
-            title="Choose image"
-            aria-label="Choose image"
-          >
-            <ImageUp className="h-4 w-4" aria-hidden />
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              disabled={!selectedAssetId || !canUploadPhoto}
-              className="sr-only"
-              onChange={(event) => {
-                const file = event.currentTarget.files?.[0];
-
-                if (file) {
-                  onPhotoFileSelected(file);
-                  event.currentTarget.value = "";
-                }
-              }}
-            />
-          </label>
-        </div>
-        <button
-          type="button"
-          onClick={onAnalyze}
-          disabled={!canAnalyze || isAnalyzing}
-          aria-busy={isAnalyzing}
-          aria-label="Analyze"
-          className="inline-flex h-11 items-center justify-center gap-2 border border-slate-700 bg-slate-900 px-3 text-sm font-semibold text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:text-slate-600"
-        >
-          {isAnalyzing ? (
-            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
-          ) : (
-            <Brain className="h-4 w-4" aria-hidden />
-          )}
-          Analyze
-        </button>
-        <button
-          type="button"
-          onClick={onPrioritize}
-          disabled={!canPrioritize || isPrioritizing}
-          aria-busy={isPrioritizing}
-          aria-label="Prioritize"
-          className="inline-flex h-11 items-center justify-center gap-2 border border-slate-700 bg-slate-900 px-3 text-sm font-semibold text-slate-300 transition hover:border-slate-500 hover:bg-slate-800 disabled:cursor-not-allowed disabled:text-slate-600"
-        >
-          {isPrioritizing ? (
-            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
-          ) : (
-            <CloudSun className="h-4 w-4" aria-hidden />
-          )}
-          Prioritize
-        </button>
       </div>
     </section>
   );

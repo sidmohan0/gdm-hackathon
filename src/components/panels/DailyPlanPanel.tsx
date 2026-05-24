@@ -74,10 +74,6 @@ export function DailyPlanPanel({
   modelDetails,
   onIssueSelect,
 }: DailyPlanPanelProps) {
-  if (status === "idle" && !dailyPlan && trace.length === 0) {
-    return null;
-  }
-
   const steps = trace.length > 0 ? trace : createEmptyPrioritizationTrace();
 
   return (
@@ -90,7 +86,10 @@ export function DailyPlanPanel({
           <h2 className="mt-1 text-sm font-semibold text-slate-100">
             {status === "running"
               ? "Prioritizing open work"
-              : dailyPlan?.summary ?? "Prioritization failed"}
+              : dailyPlan?.summary ??
+                (status === "failed"
+                  ? "Prioritization failed"
+                  : "No daily ranking generated")}
           </h2>
         </div>
         <Route className="mt-1 h-4 w-4 shrink-0 text-emerald-300" aria-hidden />
@@ -137,6 +136,10 @@ export function DailyPlanPanel({
             </button>
           ))}
         </div>
+      ) : status === "idle" ? (
+        <p className="mb-3 border border-slate-800 bg-slate-900 p-3 text-sm text-slate-400">
+          No daily ranking generated.
+        </p>
       ) : null}
 
       <div className="border border-slate-800 bg-slate-900 p-3">

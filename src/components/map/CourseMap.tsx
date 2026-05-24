@@ -201,7 +201,7 @@ export function CourseMap({
           ["==", ["get", "assetId"], selectedAssetIdRef.current ?? "__none__"],
         ],
         paint: {
-          "line-color": "#ffffff",
+          "line-color": "#004225",
           "line-opacity": 0.95,
           "line-width": 10,
         },
@@ -256,10 +256,10 @@ export function CourseMap({
           ["==", ["get", "assetId"], selectedAssetIdRef.current ?? "__none__"],
         ],
         paint: {
-          "circle-color": "#ffffff",
+          "circle-color": "#004225",
           "circle-radius": 14,
-          "circle-opacity": 0.2,
-          "circle-stroke-color": "#ffffff",
+          "circle-opacity": 0.24,
+          "circle-stroke-color": "#004225",
           "circle-stroke-width": 3,
         },
       });
@@ -271,7 +271,7 @@ export function CourseMap({
         paint: {
           "circle-color": severityColorExpression(),
           "circle-radius": 9,
-          "circle-stroke-color": "#111827",
+          "circle-stroke-color": "#ffffff",
           "circle-stroke-width": 2,
         },
       });
@@ -451,7 +451,7 @@ export function CourseMap({
 
   return (
     <section
-      className="relative h-full min-h-[620px] overflow-hidden border border-slate-700 bg-slate-950"
+      className="relative h-full min-h-0 overflow-hidden border border-slate-200 bg-slate-100"
       aria-label="Course operations map"
     >
       <div
@@ -462,13 +462,13 @@ export function CourseMap({
           position: "absolute",
         }}
       />
-      <div className="pointer-events-none absolute left-4 top-4 flex items-center gap-2 rounded border border-slate-600 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 backdrop-blur">
-        <MapPinned className="h-4 w-4 text-emerald-300" aria-hidden />
+      <div className="pointer-events-none absolute left-4 top-4 flex items-center gap-2 border border-slate-200 bg-white/90 px-3 py-2 text-sm text-slate-900 shadow-sm backdrop-blur">
+        <MapPinned className="h-4 w-4 text-[#004225]" aria-hidden />
         <span>{PRESIDIO_COURSE.name}</span>
       </div>
       {visibleMapError ? (
         <div
-          className="absolute inset-x-6 top-24 border border-red-400 bg-red-950/90 p-4 text-sm text-red-50 shadow-xl"
+          className="absolute inset-x-6 top-24 border border-red-300 bg-white p-4 text-sm text-red-700 shadow-xl"
           role="alert"
         >
           <div className="mb-2 flex items-center gap-2 font-semibold">
@@ -479,13 +479,13 @@ export function CourseMap({
         </div>
       ) : null}
       {highlightedIssue ? (
-        <div className="pointer-events-none absolute left-4 top-24 max-w-[320px] border border-amber-300 bg-slate-950/90 p-3 text-sm text-slate-100 shadow-xl backdrop-blur">
-          <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-amber-200">
+        <div className="pointer-events-none absolute left-4 top-24 max-w-[320px] border border-amber-300 bg-white/95 p-3 text-sm text-slate-900 shadow-xl backdrop-blur">
+          <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">
             <span className="h-2.5 w-2.5 rounded-full bg-amber-300 shadow-[0_0_18px_rgba(253,224,71,0.9)]" />
             Top priority
           </div>
           <p className="font-semibold">{highlightedIssue.title}</p>
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-slate-600">
             {highlightedIssue.id} / {highlightedIssue.severity}
           </p>
         </div>
